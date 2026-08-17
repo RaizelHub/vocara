@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1320 320" role="img" aria-labelledby="title">
+  <title id="title">VOCARA horizontal logo</title>
+  <defs>
+    <linearGradient id="coral" x1="40" y1="30" x2="340" y2="285" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A70"/>
+      <stop offset="0.55" stop-color="#FF5A36"/>
+      <stop offset="1" stop-color="#F64025"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(18 22) scale(.5)">
+    <path fill="url(#coral)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+    <path fill="url(#coral)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+  </g>
+  <text x="386" y="216" fill="#151515" font-family="Inter, Avenir Next, Segoe UI, Arial, sans-serif" font-size="164" font-weight="650" letter-spacing="20">VOCARA</text>
+</svg>

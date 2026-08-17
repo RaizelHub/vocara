@@ -1,23 +1,34 @@
 {
   "expo": {
-    "name": "vocara",
+    "name": "Vocara",
     "slug": "vocara",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/vocara-icon.png",
     "scheme": "vocara",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/images/vocara-icon.png",
+      "bundleIdentifier": "com.vocara.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.vocara.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
+        "foregroundImage": "./assets/images/vocara-adaptive-foreground.png",
+        "backgroundColor": "#F7F7F3",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "output": "static",
@@ -28,15 +39,41 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "imageWidth": 180,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F7F3"
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Vocara uses your microphone to record your interview practice answers.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-asset",
+      [
+        "@sentry/react-native",
+        {
+          "url": "https://sentry.io/",
+          "organization": "vocara",
+          "project": "vocara-mobile",
+          "note": "Authenticates via SENTRY_AUTH_TOKEN env var during EAS builds. Replace organization/project with your Sentry project slug."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "59b8b49a-94be-46a2-9b2d-2d2a2d4c539d"
+      }
     }
   }
 }

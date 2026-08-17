@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512" role="img" aria-labelledby="title desc">
+  <title id="title">VOCARA voice V symbol</title>
+  <desc id="desc">Two flowing coral ribbons form a confident V with a rising voice-shaped channel.</desc>
+  <defs>
+    <linearGradient id="left" x1="92" y1="66" x2="352" y2="438" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A70"/>
+      <stop offset="0.52" stop-color="#FF5A36"/>
+      <stop offset="1" stop-color="#F64025"/>
+    </linearGradient>
+    <linearGradient id="right" x1="536" y1="58" x2="292" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A70"/>
+      <stop offset="0.48" stop-color="#FF7555"/>
+      <stop offset="1" stop-color="#FF4B2B"/>
+    </linearGradient>
+    <linearGradient id="fold" x1="156" y1="230" x2="328" y2="412" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF5A36" stop-opacity="0"/>
+      <stop offset="1" stop-color="#D92E1A" stop-opacity="0.38"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#left)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+  <path fill="url(#fold)" d="M119 178c42 57 88 86 132 97l21 50c22 52 49 86 92 105-19 14-42 24-68 30-61-22-106-65-133-124l-44-158Z"/>
+  <path fill="url(#right)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+</svg>

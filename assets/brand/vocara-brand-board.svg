@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" role="img" aria-labelledby="title desc">
+  <title id="title">VOCARA brand identity presentation</title>
+  <desc id="desc">Primary symbol, app icon, horizontal logo, and light and dark brand applications.</desc>
+  <defs>
+    <linearGradient id="coral" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FF8A70"/>
+      <stop offset=".55" stop-color="#FF5A36"/>
+      <stop offset="1" stop-color="#F64025"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F3F2ED"/>
+    </linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="18" stdDeviation="28" flood-color="#4B2A20" flood-opacity=".12"/>
+    </filter>
+  </defs>
+  <rect width="1920" height="1200" fill="#F7F7F3"/>
+  <circle cx="1790" cy="80" r="290" fill="#FF5A36" opacity=".06"/>
+  <text x="96" y="92" fill="#FF5A36" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="20" font-weight="700" letter-spacing="5">BRAND IDENTITY / 01</text>
+  <text x="96" y="168" fill="#151515" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="70" font-weight="700" letter-spacing="5">VOCARA</text>
+  <text x="98" y="212" fill="#5E5A56" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="450">Speak better. Interview smarter.</text>
+
+  <rect x="96" y="274" width="660" height="500" rx="34" fill="#FFFFFF"/>
+  <text x="138" y="326" fill="#8B8580" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">PRIMARY SYMBOL</text>
+  <g transform="translate(176 350) scale(.78)">
+    <path fill="url(#coral)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+    <path fill="#D92E1A" fill-opacity=".14" d="M119 178c42 57 88 86 132 97l21 50c22 52 49 86 92 105-19 14-42 24-68 30-61-22-106-65-133-124l-44-158Z"/>
+    <path fill="url(#coral)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+  </g>
+  <text x="138" y="736" fill="#5E5A56" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18">VOICE FLOW · CONFIDENCE · FORWARD MOTION</text>
+
+  <rect x="796" y="274" width="482" height="500" rx="34" fill="#EAE9E4"/>
+  <text x="838" y="326" fill="#8B8580" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">APP ICON</text>
+  <g filter="url(#shadow)">
+    <rect x="884" y="385" width="306" height="306" rx="70" fill="url(#paper)"/>
+    <g transform="translate(907 420) scale(.42)">
+      <path fill="url(#coral)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+      <path fill="url(#coral)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+    </g>
+  </g>
+
+  <rect x="1318" y="274" width="506" height="240" rx="34" fill="#151515"/>
+  <text x="1360" y="326" fill="#89837E" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">DARK APPLICATION</text>
+  <g transform="translate(1372 355) scale(.22)">
+    <path fill="url(#coral)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+    <path fill="url(#coral)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+  </g>
+  <text x="1530" y="443" fill="#F7F7F3" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="52" font-weight="650" letter-spacing="9">VOCARA</text>
+
+  <rect x="1318" y="534" width="506" height="240" rx="34" fill="#FF5A36"/>
+  <text x="1360" y="586" fill="#7C2011" opacity=".75" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">ONE-COLOR MARK</text>
+  <g transform="translate(1418 592) scale(.46)">
+    <path fill="#F7F7F3" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+    <path fill="#F7F7F3" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+  </g>
+
+  <rect x="96" y="814" width="1182" height="288" rx="34" fill="#FFFFFF"/>
+  <text x="138" y="866" fill="#8B8580" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">HORIZONTAL LOCKUP</text>
+  <g transform="translate(126 905) scale(.28)">
+    <path fill="url(#coral)" d="M82 64c-22-4-37 17-27 37l108 235c27 59 72 102 133 124 31-9 58-27 80-54-50-18-80-54-104-111l-62-145C184 91 137 73 82 64Z"/>
+    <path fill="url(#coral)" d="M558 64c22-4 37 17 27 37L477 336c-35 76-101 124-181 124-17 0-34-2-50-6 73-24 111-72 139-138l71-166c26-59 73-77 102-86Z"/>
+  </g>
+  <text x="340" y="1034" fill="#151515" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="112" font-weight="650" letter-spacing="18">VOCARA</text>
+
+  <rect x="1318" y="814" width="506" height="288" rx="34" fill="#FFFFFF"/>
+  <text x="1360" y="866" fill="#8B8580" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="16" font-weight="650" letter-spacing="2">CORE PALETTE</text>
+  <circle cx="1390" cy="948" r="38" fill="#FF5A36"/>
+  <circle cx="1490" cy="948" r="38" fill="#FF7555"/>
+  <circle cx="1590" cy="948" r="38" fill="#FF8A70"/>
+  <circle cx="1690" cy="948" r="38" fill="#151515"/>
+  <text x="1352" y="1035" fill="#5E5A56" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17">#FF5A36</text>
+  <text x="1654" y="1035" fill="#5E5A56" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="17">#151515</text>
+  <text x="96" y="1160" fill="#8B8580" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="15" letter-spacing="2">VOCARA · AI INTERVIEW &amp; SPEAKING COACH · 2026</text>
+</svg>
