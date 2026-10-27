@@ -60,19 +60,34 @@ const TECHNICAL_GENERIC = [
   "What is the most challenging problem you have solved in your work?",
 ];
 
+const SITUATIONAL = [
+  "What would you do if a key stakeholder strongly disagreed with your proposal on a critical project?",
+  "How would you handle a sudden change in project scope right before a major deadline?",
+  "If you discovered a serious error in your work that had already been delivered to a client, what would you do?",
+  "How would you handle working with a coworker who refuses to collaborate or meet agreed deadlines?",
+  "What would you do if you were asked to complete a task you have never performed before with limited guidance?",
+  "Suppose two managers give you urgent, conflicting assignments that are both due at the end of the day. How do you handle it?",
+  "If you noticed a recurring issue in your team's workflow that hurts efficiency, how would you approach fixing it?",
+  "What would you do if a project you were responsible for began falling noticeably behind schedule?",
+  "How would you respond if a client or manager gave you blunt, critical feedback during a presentation?",
+  "If you were asked to bypass an important quality check to meet a tight deadline, how would you respond?",
+  "What would you do if you realized you provided inaccurate information in a high-stakes meeting?",
+  "How would you react if an unexpected system failure or crisis occurred while your supervisor was unavailable?",
+];
+
 const MIXED = [
   "Tell me about yourself.",
+  "What would you do if a client strongly disagreed with your proposed solution?",
   "Walk me through a project you've built. What were the important decisions?",
+  "How would you handle an urgent deadline that was suddenly moved up?",
   "Tell me about a time you worked under pressure.",
   "How would you debug a feature that suddenly stopped working?",
   "Tell me about a time you received feedback and how you used it.",
-  "Explain a decision you made recently to a colleague.",
+  "Suppose you are given conflicting priorities from two different stakeholders. How do you resolve it?",
   "How do you prioritize when everything feels urgent?",
-  "Describe a skill you are currently improving and how you practice it.",
+  "If you noticed a project was falling behind schedule, what steps would you take?",
   "Tell me about a time you helped a teammate get back on track.",
-  "Where do you see yourself in a year?",
-  "Why are you interested in this role?",
-  "What do you want to be known for at work?",
+  "What would you do if you were assigned a task with unfamiliar tools or systems?",
 ];
 
 export function questionsFor(
@@ -85,6 +100,9 @@ export function questionsFor(
   switch (type) {
     case "behavioral":
       bank = BEHAVIORAL;
+      break;
+    case "situational":
+      bank = SITUATIONAL;
       break;
     case "technical":
       bank = /developer|software|engineer|programmer/i.test(role)
@@ -114,13 +132,15 @@ export function sampleQuestions(
   const bank =
     type === "behavioral"
       ? BEHAVIORAL
-      : type === "technical"
-        ? /developer|software|engineer|programmer/i.test(role)
-          ? TECHNICAL_DEVELOPMENT
-          : TECHNICAL_GENERIC
-        : type === "mixed"
-          ? MIXED
-          : STANDARD;
+      : type === "situational"
+        ? SITUATIONAL
+        : type === "technical"
+          ? /developer|software|engineer|programmer/i.test(role)
+            ? TECHNICAL_DEVELOPMENT
+            : TECHNICAL_GENERIC
+          : type === "mixed"
+            ? MIXED
+            : STANDARD;
 
   const pool = [...bank];
   const picked: string[] = [];

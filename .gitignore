@@ -45,6 +45,10 @@ example
 /ios
 /android
 
-/supabase
-/docs
+# Backend source, migrations, tests and examples belong in Git.
+/supabase/.temp/
+/supabase/.branches/
+/supabase/snippets/
+/supabase/.env*
+!/supabase/.env.example
 /.claude

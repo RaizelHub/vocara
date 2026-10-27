@@ -93,6 +93,7 @@ const EMPTY_METRICS: UserPracticeMetrics = {
 const INTERVIEW_TYPE_LABELS: Record<string, string> = {
   standard: "Standard",
   behavioral: "Behavioral",
+  situational: "Situational",
   technical: "Technical",
   mixed: "Mixed",
   job_specific: "Job-specific",
@@ -101,6 +102,7 @@ const INTERVIEW_TYPE_LABELS: Record<string, string> = {
 const INTERVIEW_TYPE_KEYS: InterviewType[] = [
   "standard",
   "behavioral",
+  "situational",
   "technical",
   "mixed",
   "job_specific",

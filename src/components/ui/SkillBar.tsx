@@ -1,11 +1,10 @@
 import { useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withTiming,
+  withSpring,
 } from "react-native-reanimated";
 
 import { colors } from "@/theme/colors";
@@ -14,19 +13,26 @@ export type SkillBarProps = {
   /** 0–100 round skill score */
   value: number;
   index?: number;
+  height?: number;
+  barColor?: string;
 };
 
 /**
- * A thin voice-inspired indicator: a rounded bar that fills from 0 → value
- * once on mount, slightly staggered per row.
+ * Voice-inspired skill indicator: a smooth rounded pill bar that fills
+ * from 0 → value on mount with fluid spring dynamics.
  */
-export function SkillBar({ value, index = 0 }: SkillBarProps) {
+export function SkillBar({
+  value,
+  index = 0,
+  height = 7,
+  barColor = colors.accent,
+}: SkillBarProps) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
     progress.value = withDelay(
-      index * 90,
-      withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }),
+      index * 70,
+      withSpring(1, { damping: 18, stiffness: 140 }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
@@ -35,28 +41,32 @@ export function SkillBar({ value, index = 0 }: SkillBarProps) {
     transform: [{ scaleX: progress.value }],
   }));
 
+  const radius = Math.round(height / 2);
+
   return (
     <View
       accessibilityRole="progressbar"
       accessibilityValue={{ min: 0, max: 100, now: value }}
-      style={styles.track}
+      style={[styles.track, { height, borderRadius: radius }]}
     >
-      <Animated.View style={[styles.fill, { width: `${value}%` }, fillStyle]} />
+      <Animated.View
+        style={[
+          styles.fill,
+          { width: `${Math.min(100, Math.max(0, value))}%`, borderRadius: radius, backgroundColor: barColor },
+          fillStyle,
+        ]}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   track: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderSubtle,
     overflow: "hidden",
   },
   fill: {
     height: "100%",
-    borderRadius: 3,
-    backgroundColor: colors.accent,
     transformOrigin: "left",
   },
 });

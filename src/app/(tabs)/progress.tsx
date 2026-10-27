@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppHeader } from "@/components/ui/AppHeader";
 import { ErrorState, LoadingState } from "@/components/ui/DataState";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -125,8 +126,8 @@ export default function ProgressScreen() {
     : [];
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
-      <Text style={styles.wordmark}>VOCARA</Text>
+    <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
+      <AppHeader subtitle="Performance Tracker" />
 
       {loading ? (
         <LoadingState label="Loading your progress…" />
@@ -143,101 +144,153 @@ export default function ProgressScreen() {
           showsVerticalScrollIndicator={false}
           entering={FadeInDown.delay(0).duration(300)}
         >
-          <Text style={styles.title}>Progress</Text>
-          <Text style={styles.subtitle}>Your interview readiness at a glance.</Text>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Your Progress</Text>
+            <Text style={styles.subtitle}>Track your readiness, skill growth, and consistency.</Text>
+          </View>
 
-          <Animated.View entering={FadeInDown.delay(80).duration(420)} style={styles.hero}>
-            <View style={styles.readinessRow}>
-              <View>
-                <Text style={styles.heroLabel}>Interview readiness</Text>
+          {/* Hero Dashboard */}
+          <Animated.View entering={FadeInDown.delay(60).duration(420)} style={styles.hero}>
+            <View style={styles.readinessHeroTile}>
+              <Text style={styles.heroLabel}>INTERVIEW READINESS</Text>
+              <View style={styles.readinessScoreRow}>
                 <AnimatedNumber value={readinessScore} delay={200} style={styles.heroScore} />
-                <View style={styles.heroDelta}>
-                  <Ionicons
-                    name={readinessChange >= 0 ? "arrow-up" : "arrow-down"}
-                    size={12}
-                    color={readinessChange >= 0 ? colors.success : colors.warning}
-                  />
-                  <Text style={[styles.heroDeltaText, readinessChange < 0 && styles.heroDeltaTextDown]}>
-                    {readinessChange >= 0 ? "+" : ""}
-                    {readinessChange} this week
-                  </Text>
-                </View>
+                <Text style={styles.heroScorePercent}>%</Text>
               </View>
-              <View style={styles.heroStats}>
-                <View style={styles.statBlock}>
-                  <Text style={styles.statValue}>{sessionsCompleted}</Text>
-                  <Text style={styles.statLabel}>Sessions</Text>
+              <View
+                style={[
+                  styles.heroDeltaBadge,
+                  readinessChange >= 0 ? styles.heroDeltaUp : styles.heroDeltaDown,
+                ]}
+              >
+                <Ionicons
+                  name={readinessChange >= 0 ? "arrow-up" : "arrow-down"}
+                  size={12}
+                  color={readinessChange >= 0 ? colors.success : colors.warning}
+                />
+                <Text
+                  style={[
+                    styles.heroDeltaText,
+                    readinessChange < 0 && styles.heroDeltaTextDown,
+                  ]}
+                >
+                  {readinessChange >= 0 ? "+" : ""}
+                  {readinessChange} this week
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.heroStatsRow}>
+              <View style={styles.statBox}>
+                <View style={styles.statIconWrap}>
+                  <Ionicons name="checkbox-outline" size={17} color={colors.accent} />
                 </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statBlock}>
-                  <Text style={styles.statValue}>{practiceTime}</Text>
-                  <Text style={styles.statLabel}>Practice time</Text>
+                <Text style={styles.statValue}>{sessionsCompleted}</Text>
+                <Text style={styles.statLabel}>Completed Sessions</Text>
+              </View>
+
+              <View style={styles.statBox}>
+                <View style={styles.statIconWrap}>
+                  <Ionicons name="time-outline" size={17} color={colors.accent} />
                 </View>
+                <Text style={styles.statValue}>{practiceTime}</Text>
+                <Text style={styles.statLabel}>Total Practice</Text>
               </View>
             </View>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(170).duration(420)} style={styles.section}>
-            <SectionHeader title="Skill progress" />
-            <View style={styles.skillList}>
-              {skills.map((skill, i) => (
-                <View key={skill.key} style={styles.skillRow}>
-                  <View style={styles.skillTop}>
-                    <Text style={styles.skillName}>{skill.label}</Text>
-                    <Text style={styles.skillValue} accessibilityLabel={`${skill.label} ${skill.value} percent`}>
-                      {skill.value}
-                    </Text>
-                  </View>
-                  <SkillBar value={skill.value} index={i} />
+          {/* Skill Progress */}
+          {skills.length > 0 && (
+            <Animated.View entering={FadeInDown.delay(140).duration(420)} style={styles.section}>
+              <SectionHeader
+                title="Skill Progress"
+                subtitle="Evaluated across all practice responses"
+              />
+              <View style={styles.card}>
+                <View style={styles.skillList}>
+                  {skills.map((skill, i) => (
+                    <View key={skill.key} style={styles.skillRow}>
+                      <View style={styles.skillTop}>
+                        <Text style={styles.skillName}>{skill.label}</Text>
+                        <View style={styles.skillBadge}>
+                          <Text
+                            style={styles.skillValue}
+                            accessibilityLabel={`${skill.label} ${skill.value} percent`}
+                          >
+                            {skill.value}%
+                          </Text>
+                        </View>
+                      </View>
+                      <SkillBar value={skill.value} index={i} height={8} />
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
-          </Animated.View>
+              </View>
+            </Animated.View>
+          )}
 
-          <Animated.View entering={FadeInDown.delay(250).duration(420)} style={styles.section}>
-            <SectionHeader title="Speaking practice" />
+          {/* Speaking Practice */}
+          <Animated.View entering={FadeInDown.delay(220).duration(420)} style={styles.section}>
+            <SectionHeader
+              title="Speaking Practice"
+              subtitle="Daily fluency and voice practice"
+              actionLabel="Practice now"
+              onAction={() => router.push("/speaking")}
+            />
             <PressableScale
               onPress={() => router.push("/speaking")}
               accessibilityLabel="Open speaking practice"
+              activeScale={0.98}
               style={styles.speakingPanel}
             >
               <View style={styles.speakingRow}>
                 <View style={styles.speakingStats}>
-                  <View style={styles.statBlock}>
-                    <Text style={styles.statValue}>{speakingStreak}</Text>
-                    <Text style={styles.statLabel}>Day streak</Text>
+                  <View style={styles.miniStatBlock}>
+                    <Ionicons name="flame" size={18} color={colors.accent} />
+                    <Text style={styles.miniStatValue}>{speakingStreak}</Text>
+                    <Text style={styles.miniStatLabel}>Day streak</Text>
                   </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statBlock}>
-                    <Text style={styles.statValue}>{speakingTodayMinutes}m</Text>
-                    <Text style={styles.statLabel}>Today</Text>
+                  <View style={styles.miniDivider} />
+                  <View style={styles.miniStatBlock}>
+                    <Ionicons name="stopwatch-outline" size={18} color={colors.secondary} />
+                    <Text style={styles.miniStatValue}>{speakingTodayMinutes}m</Text>
+                    <Text style={styles.miniStatLabel}>Today</Text>
                   </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statBlock}>
-                    <Text style={styles.statValue}>
-                      {speakingBest !== null ? speakingBest : "—"}
+                  <View style={styles.miniDivider} />
+                  <View style={styles.miniStatBlock}>
+                    <Ionicons name="star-outline" size={18} color="#E9A23B" />
+                    <Text style={styles.miniStatValue}>
+                      {speakingBest !== null ? `${speakingBest}%` : "—"}
                     </Text>
-                    <Text style={styles.statLabel}>Best score</Text>
+                    <Text style={styles.miniStatLabel}>Best score</Text>
                   </View>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                <View style={styles.speakingArrowCircle}>
+                  <Ionicons name="chevron-forward" size={16} color={colors.ink} />
+                </View>
               </View>
             </PressableScale>
           </Animated.View>
 
-          <Animated.View entering={FadeInDown.delay(320).duration(420)} style={styles.section}>
-            <SectionHeader title="This week" />
+          {/* This Week Activity */}
+          <Animated.View entering={FadeInDown.delay(300).duration(420)} style={styles.section}>
+            <SectionHeader
+              title="Weekly Consistency"
+              subtitle="Days with completed practice or speaking sessions"
+            />
             <View style={styles.weekPanel}>
               {weeklyPractice.map((done, i) => (
                 <View key={WEEKDAYS[i]} style={styles.day}>
-                  <View style={[styles.dayCircle, done ? styles.dayCircleDone : null]}>
+                  <View style={[styles.dayCircle, done && styles.dayCircleDone]}>
                     {done ? (
-                      <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                      <Ionicons name="checkmark" size={16} color="#FFFFFF" />
                     ) : (
                       <View style={styles.dayEmptyDot} />
                     )}
                   </View>
-                  <Text style={styles.dayLabel}>{WEEKDAYS[i]}</Text>
+                  <Text style={[styles.dayLabel, done && styles.dayLabelDone]}>
+                    {WEEKDAYS[i]}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -253,177 +306,327 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  wordmark: {
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 2.4,
-    color: colors.ink,
-    paddingHorizontal: 20,
-    marginBottom: 6,
-  },
-  speakingPanel: {
-    backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  speakingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 8,
-    paddingVertical: 18,
-  },
-  speakingStats: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 44,
+    paddingBottom: 48,
+  },
+  titleBlock: {
+    marginTop: 14,
+    marginBottom: 22,
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.8,
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: -0.7,
     color: colors.ink,
-    marginTop: 20,
   },
   subtitle: {
-    fontSize: 15.5,
+    fontSize: 15,
     color: colors.secondary,
-    marginTop: 5,
-    marginBottom: 26,
+    marginTop: 4,
+    lineHeight: 20,
   },
   hero: {
     backgroundColor: colors.surface,
-    borderRadius: 26,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: 22,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      android: {
+        elevation: 3,
+      },
+      web: {
+        boxShadow: "0 6px 18px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
-  readinessRow: {
-    flexDirection: "row",
+  readinessHeroTile: {
     alignItems: "center",
-    gap: 18,
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
   },
   heroLabel: {
-    fontSize: 13.5,
-    fontWeight: "600",
-    color: colors.secondary,
-  },
-  heroScore: {
-    fontSize: 54,
+    fontSize: 11.5,
     fontWeight: "800",
-    letterSpacing: -2,
-    color: colors.ink,
-    lineHeight: 60,
-    includeFontPadding: false,
+    letterSpacing: 1.2,
+    color: colors.muted,
   },
-  heroDelta: {
+  readinessScoreRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
+    alignItems: "baseline",
+    justifyContent: "center",
     marginTop: 2,
   },
+  heroScore: {
+    fontSize: 58,
+    fontWeight: "900",
+    letterSpacing: -2,
+    color: colors.ink,
+    lineHeight: 66,
+    includeFontPadding: false,
+  },
+  heroScorePercent: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: colors.secondary,
+    marginLeft: 2,
+  },
+  heroDeltaBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginTop: 4,
+  },
+  heroDeltaUp: {
+    backgroundColor: colors.successLight,
+  },
+  heroDeltaDown: {
+    backgroundColor: colors.warningLight,
+  },
   heroDeltaText: {
-    fontSize: 13,
-    fontWeight: "700",
+    fontSize: 12.5,
+    fontWeight: "800",
     color: colors.success,
   },
   heroDeltaTextDown: {
     color: colors.warning,
   },
-  heroStats: {
-    flex: 1,
+  heroStatsRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-around",
-    alignSelf: "stretch",
+    gap: 12,
+    marginTop: 18,
   },
-  statBlock: {
-    alignItems: "center",
-    gap: 4,
+  statBox: {
     flex: 1,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 16,
+    padding: 14,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  statIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: "800",
+    fontSize: 20,
+    fontWeight: "900",
     color: colors.ink,
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
   },
   statLabel: {
-    fontSize: 12,
-    color: colors.muted,
+    fontSize: 11.5,
+    color: colors.secondary,
     fontWeight: "600",
-  },
-  statDivider: {
-    width: 1,
-    alignSelf: "stretch",
-    backgroundColor: colors.border,
+    marginTop: 2,
   },
   section: {
-    marginTop: 32,
+    marginTop: 34,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   skillList: {
-    gap: 15,
+    gap: 16,
   },
   skillRow: {
-    gap: 7,
+    gap: 8,
   },
   skillTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "baseline",
+    alignItems: "center",
   },
   skillName: {
     fontSize: 14.5,
     fontWeight: "700",
     color: colors.ink,
   },
+  skillBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceSubtle,
+  },
   skillValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "800",
     color: colors.ink,
     fontVariant: ["tabular-nums"],
   },
+  speakingPanel: {
+    backgroundColor: colors.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
+  },
+  speakingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  speakingStats: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  miniStatBlock: {
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+  },
+  miniStatValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: colors.ink,
+    letterSpacing: -0.3,
+  },
+  miniStatLabel: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: "700",
+  },
+  miniDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.borderSubtle,
+  },
+  speakingArrowCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
   weekPanel: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 18,
-    paddingVertical: 18,
+    paddingVertical: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   day: {
     alignItems: "center",
-    gap: 7,
+    gap: 8,
   },
   dayCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
+    backgroundColor: colors.surfaceSubtle,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   dayCircleDone: {
     backgroundColor: colors.accent,
     borderColor: colors.accent,
+    ...Platform.select({
+      ios: {
+        shadowColor: colors.accent,
+        shadowOpacity: 0.3,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 2px 8px rgba(255, 90, 54, 0.3)",
+      },
+      default: {},
+    }),
   },
   dayEmptyDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.muted,
+    backgroundColor: colors.border,
   },
   dayLabel: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: "700",
     color: colors.secondary,
+  },
+  dayLabelDone: {
+    color: colors.ink,
+    fontWeight: "800",
   },
 });

@@ -6,7 +6,11 @@ import {
   type View,
   type ViewStyle,
 } from "react-native";
-import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from "react-native-reanimated";
 
 export type PressableScaleProps = {
   children: ReactNode;
@@ -18,11 +22,15 @@ export type PressableScaleProps = {
   accessibilityState?: AccessibilityState;
   /** True for small icon/row targets that need an invisible touch margin. */
   collapsed?: boolean;
+  /** Custom scale factor on press (default: 0.96) */
+  activeScale?: number;
 };
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 /**
- * Pressable with restrained tactile feedback: the whole hit area scales
- * down ~3% on press and eases back out. Settled and still between presses.
+ * Pressable with tactile spring feedback: scales down smoothly on press and
+ * bounces back with natural spring dynamics.
  */
 export const PressableScale = forwardRef<View, PressableScaleProps>(function PressableScale(
   {
@@ -34,17 +42,18 @@ export const PressableScale = forwardRef<View, PressableScaleProps>(function Pre
     accessibilityLabel,
     accessibilityState,
     collapsed,
+    activeScale = 0.96,
   },
   ref,
 ) {
   const scale = useSharedValue(1);
 
   const handlePressIn = useCallback(() => {
-    scale.value = withTiming(0.97, { duration: 90 });
-  }, [scale]);
+    scale.value = withSpring(activeScale, { damping: 14, stiffness: 380 });
+  }, [activeScale, scale]);
 
   const handlePressOut = useCallback(() => {
-    scale.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+    scale.value = withSpring(1, { damping: 12, stiffness: 320 });
   }, [scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -52,20 +61,21 @@ export const PressableScale = forwardRef<View, PressableScaleProps>(function Pre
   }));
 
   return (
-    <Animated.View ref={ref} style={[animatedStyle, style]}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
-        onPress={disabled ? undefined : onPress}
-        onLongPress={disabled ? undefined : onLongPress}
-        onPressIn={disabled ? undefined : handlePressIn}
-        onPressOut={disabled ? undefined : handlePressOut}
-        disabled={disabled}
-        hitSlop={collapsed ? 10 : undefined}
-      >
-        {children}
-      </Pressable>
-    </Animated.View>
+    <AnimatedPressable
+      ref={ref as any}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
+      onPress={disabled ? undefined : onPress}
+      onLongPress={disabled ? undefined : onLongPress}
+      onPressIn={disabled ? undefined : handlePressIn}
+      onPressOut={disabled ? undefined : handlePressOut}
+      disabled={disabled}
+      hitSlop={collapsed ? 10 : undefined}
+      style={[style, animatedStyle]}
+    >
+      {children}
+    </AnimatedPressable>
   );
 });
+

@@ -542,6 +542,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_reserved_interview: {
+        Args: { p_session_id: string; p_role: string; p_type: string; p_difficulty: string; p_style: string; p_questions: Json };
+        Returns: InterviewSessionRecord;
+      };
+      get_interview_recovery: {
+        Args: { p_session_id?: string };
+        Returns: Json;
+      };
       complete_career_setup: {
         Args: {
           p_target_role: string;

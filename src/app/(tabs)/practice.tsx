@@ -11,45 +11,54 @@ import { router, useFocusEffect, type Href } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { AppHeader } from "@/components/ui/AppHeader";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { SectionHeader } from "@/components/ui/SectionHeader";
 import { colors } from "@/theme/colors";
 import { getJobErrorMessage, jobService } from "@/services/jobService";
 import type { JobDescription } from "@/types/job";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-const MODES: { icon: IconName; title: string; description: string; href: Href }[] = [
+const MODES: { icon: IconName; title: string; subtitle: string; description: string; href: Href }[] = [
   {
     icon: "flash",
     title: "Quick Practice",
-    description: "One question. Instant feedback. Fit practice in between things.",
+    subtitle: "2 min warm-up",
+    description: "One targeted question with instant AI coaching and feedback.",
     href: "/interview/quick",
   },
   {
     icon: "mic",
     title: "Mock Interview",
-    description: "A realistic multi-question interview with a full session ending.",
+    subtitle: "Full simulation",
+    description: "A comprehensive multi-question interview with in-depth evaluation.",
     href: "/interview/setup",
   },
   {
     icon: "briefcase",
     title: "Job-Specific Interview",
-    description: "Practice questions based on a real job description and role.",
+    subtitle: "From job posting",
+    description: "Practice role-tailored questions generated from real job requirements.",
     href: "/interview/job" as Href,
   },
   {
     icon: "chatbubbles",
     title: "Speaking Practice",
-    description: "Improve fluency, confidence, and natural speaking without a formal interview.",
+    subtitle: "Fluency & confidence",
+    description: "Improve articulation, pacing, and natural speaking under pressure.",
     href: "/speaking",
   },
 ];
 
-const JOB_STATUS_LABELS: Record<JobDescription["analysisStatus"], string> = {
-  pending: "Not analyzed",
-  processing: "Analyzing…",
-  completed: "Ready",
-  failed: "Needs retry",
+const JOB_STATUS_CONFIG: Record<
+  JobDescription["analysisStatus"],
+  { label: string; bg: string; text: string }
+> = {
+  pending: { label: "Not analyzed", bg: colors.surfaceSubtle, text: colors.secondary },
+  processing: { label: "Analyzing…", bg: colors.warningLight, text: "#8A5A0E" },
+  completed: { label: "Ready", bg: colors.successLight, text: colors.success },
+  failed: { label: "Needs retry", bg: colors.errorLight, text: colors.error },
 };
 
 export default function PracticeScreen() {
@@ -120,33 +129,43 @@ export default function PracticeScreen() {
   }
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
-      <Text style={styles.wordmark}>VOCARA</Text>
+    <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
+      <AppHeader subtitle="Practice Hub" />
       <Animated.ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         entering={FadeInDown.delay(0).duration(300)}
       >
-        <Text style={styles.title}>Practice</Text>
-        <Text style={styles.subtitle}>Choose how you want to practice.</Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Practice Modes</Text>
+          <Text style={styles.subtitle}>Choose how you want Vocara to challenge you today.</Text>
+        </View>
 
         <View style={styles.list}>
           {MODES.map((mode, i) => (
-            <Animated.View key={mode.title} entering={FadeInDown.delay(80 + i * 70).duration(360)}>
+            <Animated.View key={mode.title} entering={FadeInDown.delay(60 + i * 60).duration(360)}>
               <PressableScale
                 onPress={() => router.push(mode.href)}
                 accessibilityLabel={mode.title}
+                activeScale={0.97}
                 style={styles.rowWrap}
               >
                 <View style={styles.row}>
                   <View style={styles.iconBubble}>
-                    <Ionicons name={mode.icon} size={21} color={colors.accent} />
+                    <Ionicons name={mode.icon} size={22} color={colors.accent} />
                   </View>
                   <View style={styles.meta}>
-                    <Text style={styles.rowTitle}>{mode.title}</Text>
+                    <View style={styles.rowHeader}>
+                      <Text style={styles.rowTitle}>{mode.title}</Text>
+                      <View style={styles.subtitleChip}>
+                        <Text style={styles.subtitleChipText}>{mode.subtitle}</Text>
+                      </View>
+                    </View>
                     <Text style={styles.rowDesc}>{mode.description}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+                  <View style={styles.arrowCircle}>
+                    <Ionicons name="chevron-forward" size={16} color={colors.ink} />
+                  </View>
                 </View>
               </PressableScale>
             </Animated.View>
@@ -154,8 +173,13 @@ export default function PracticeScreen() {
         </View>
 
         {jobsError && (
-          <PressableScale onPress={() => void loadJobs()} accessibilityLabel="Reload saved jobs">
+          <PressableScale
+            onPress={() => void loadJobs()}
+            accessibilityLabel="Reload saved jobs"
+            activeScale={0.97}
+          >
             <View style={styles.jobsErrorCard}>
+              <Ionicons name="alert-circle-outline" size={20} color={colors.error} />
               <Text style={styles.jobsError}>{jobsError}</Text>
               <Text style={styles.jobsRetry}>Try again</Text>
             </View>
@@ -163,49 +187,66 @@ export default function PracticeScreen() {
         )}
 
         {jobs !== null && jobs.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>Your jobs</Text>
+          <View style={styles.jobsSection}>
+            <SectionHeader
+              title="Saved Job Postings"
+              subtitle="Generate role-specific interviews from these postings"
+            />
             <View style={styles.list}>
-              {jobs.map((job) => (
-                <View key={job.id} style={styles.savedJobRow}>
-                  <PressableScale
-                    onPress={() => openJob(job)}
-                    onLongPress={() => confirmDelete(job)}
-                    accessibilityLabel={`${job.title ?? "Saved job"}, ${JOB_STATUS_LABELS[job.analysisStatus]}`}
-                    style={styles.savedJobMainWrap}
-                  >
-                    <View style={styles.savedJobMain}>
-                      <View style={styles.jobIconBubble}>
-                        <Ionicons
-                          name="document-text-outline"
-                          size={19}
-                          color={colors.accentDark}
-                        />
+              {jobs.map((job) => {
+                const status = JOB_STATUS_CONFIG[job.analysisStatus];
+                return (
+                  <View key={job.id} style={styles.savedJobRow}>
+                    <PressableScale
+                      onPress={() => openJob(job)}
+                      onLongPress={() => confirmDelete(job)}
+                      accessibilityLabel={`${job.title ?? "Saved job"}, ${status.label}`}
+                      activeScale={0.98}
+                      style={styles.savedJobMainWrap}
+                    >
+                      <View style={styles.savedJobMain}>
+                        <View style={styles.jobIconBubble}>
+                          <Ionicons
+                            name="document-text-outline"
+                            size={20}
+                            color={colors.accentDark}
+                          />
+                        </View>
+                        <View style={styles.meta}>
+                          <Text style={styles.rowTitle} numberOfLines={1}>
+                            {job.title ?? "Saved job description"}
+                          </Text>
+                          <View style={styles.jobSubRow}>
+                            {job.companyName ? (
+                              <Text style={styles.jobCompany} numberOfLines={1}>
+                                {job.companyName}
+                              </Text>
+                            ) : null}
+                            <View style={[styles.jobStatusChip, { backgroundColor: status.bg }]}>
+                              <Text style={[styles.jobStatusText, { color: status.text }]}>
+                                {status.label}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color={colors.muted} />
                       </View>
-                      <View style={styles.meta}>
-                        <Text style={styles.rowTitle} numberOfLines={1}>
-                          {job.title ?? "Saved job description"}
-                        </Text>
-                        <Text style={styles.rowDesc} numberOfLines={1}>
-                          {job.companyName ? `${job.companyName} · ` : ""}
-                          {JOB_STATUS_LABELS[job.analysisStatus]}
-                        </Text>
+                    </PressableScale>
+                    <PressableScale
+                      onPress={() => confirmDelete(job)}
+                      accessibilityLabel={`Delete ${job.title ?? "saved job"}`}
+                      activeScale={0.92}
+                      collapsed
+                    >
+                      <View style={styles.deleteButton}>
+                        <Ionicons name="trash-outline" size={17} color={colors.error} />
                       </View>
-                      <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-                    </View>
-                  </PressableScale>
-                  <PressableScale
-                    onPress={() => confirmDelete(job)}
-                    accessibilityLabel={`Delete ${job.title ?? "saved job"}`}
-                  >
-                    <View style={styles.deleteButton}>
-                      <Ionicons name="trash-outline" size={18} color={colors.error} />
-                    </View>
-                  </PressableScale>
-                </View>
-              ))}
+                    </PressableScale>
+                  </View>
+                );
+              })}
             </View>
-          </>
+          </View>
         )}
       </Animated.ScrollView>
     </View>
@@ -217,46 +258,35 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  wordmark: {
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 2.4,
-    color: colors.ink,
-    paddingHorizontal: 20,
-    marginBottom: 6,
-  },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 44,
+    paddingBottom: 48,
+  },
+  titleBlock: {
+    marginTop: 14,
+    marginBottom: 22,
   },
   title: {
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -0.8,
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: -0.7,
     color: colors.ink,
-    marginTop: 20,
   },
   subtitle: {
-    fontSize: 15.5,
+    fontSize: 15,
     color: colors.secondary,
-    marginTop: 5,
-    marginBottom: 26,
+    marginTop: 4,
+    lineHeight: 20,
   },
   list: {
-    gap: 12,
+    gap: 14,
   },
-  sectionLabel: {
-    marginTop: 30,
-    marginBottom: 12,
-    fontSize: 12.5,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    color: colors.muted,
+  jobsSection: {
+    marginTop: 34,
   },
   jobsError: {
     fontSize: 13,
-    lineHeight: 19,
+    lineHeight: 18,
     color: colors.error,
     flex: 1,
   },
@@ -264,12 +294,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 14,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
   },
   jobsRetry: {
     fontSize: 13,
@@ -281,9 +311,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
+    borderColor: colors.borderSubtle,
+    borderRadius: 22,
     overflow: "hidden",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 3px 12px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   savedJobMainWrap: {
     flex: 1,
@@ -292,31 +337,67 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    padding: 17,
+    padding: 18,
     paddingRight: 8,
   },
+  jobSubRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  jobCompany: {
+    fontSize: 12.5,
+    color: colors.secondary,
+    fontWeight: "600",
+  },
+  jobStatusChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  jobStatusText: {
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
   deleteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 10,
+    backgroundColor: colors.surfaceSubtle,
   },
   jobIconBubble: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: "#FBEEE9",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
   },
   rowWrap: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    padding: 17,
+    borderColor: colors.borderSubtle,
+    borderRadius: 22,
+    padding: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   row: {
     flexDirection: "row",
@@ -324,26 +405,52 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   iconBubble: {
-    width: 46,
-    height: 46,
+    width: 48,
+    height: 48,
     borderRadius: 15,
-    backgroundColor: "#FBEEE9",
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
   },
   meta: {
     flex: 1,
   },
+  rowHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
   rowTitle: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: "800",
     color: colors.ink,
     letterSpacing: -0.3,
+  },
+  subtitleChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: colors.surfaceSubtle,
+  },
+  subtitleChipText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.muted,
   },
   rowDesc: {
     fontSize: 13,
     lineHeight: 18.5,
     color: colors.secondary,
-    marginTop: 3,
+    marginTop: 4,
+  },
+  arrowCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceSubtle,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
+

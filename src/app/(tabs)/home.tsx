@@ -6,11 +6,14 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { DailyChallenge } from "@/components/home/DailyChallenge";
+import { ResumeInterview } from "@/components/interview/ResumeInterview";
 import { PracticeModes } from "@/components/home/PracticeModes";
 import { ReadinessHero } from "@/components/home/ReadinessHero";
 import { RecentPractice } from "@/components/home/RecentPractice";
 import { SkillSnapshot } from "@/components/home/SkillSnapshot";
+import { AppHeader } from "@/components/ui/AppHeader";
 import { ErrorState, LoadingState } from "@/components/ui/DataState";
+import { PressableScale } from "@/components/ui/PressableScale";
 import { dailyPrompt } from "@/data/speakingPrompts";
 import { getDataErrorMessage, isAuthenticationError } from "@/lib/dataErrors";
 import { useAuth } from "@/providers/AuthProvider";
@@ -102,15 +105,39 @@ export default function HomeScreen() {
   const readinessChange = readinessScore - (metrics?.previousReadinessScore ?? 0);
   const streak = metrics ? practiceStreakDays(metrics.practiceCompletedAt) : 0;
 
+  const streakPill = streak > 0 ? (
+    <PressableScale
+      onPress={() => router.push("/progress")}
+      accessibilityLabel={`${streak} day streak`}
+      collapsed
+      activeScale={0.92}
+    >
+      <View style={styles.headerStreakBadge}>
+        <Ionicons name="flame" size={15} color={colors.accent} />
+        <Text style={styles.headerStreakText}>{streak}d</Text>
+      </View>
+    </PressableScale>
+  ) : (
+    <PressableScale
+      onPress={() => router.push("/interview/quick")}
+      accessibilityLabel="Quick practice"
+      collapsed
+      activeScale={0.92}
+    >
+      <View style={styles.headerActionBadge}>
+        <Ionicons name="flash-outline" size={14} color={colors.accentDark} />
+        <Text style={styles.headerActionText}>Quick</Text>
+      </View>
+    </PressableScale>
+  );
+
   const header = (
-    <View style={styles.header}>
-      <Text style={styles.wordmark}>VOCARA</Text>
-    </View>
+    <><AppHeader subtitle="AI Interview Coach" rightAction={streakPill} /><ResumeInterview /></>
   );
 
   if (loading) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
         {header}
         <LoadingState label="Loading your practice space…" />
       </View>
@@ -119,7 +146,7 @@ export default function HomeScreen() {
 
   if (errorTitle && errorMessage) {
     return (
-      <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
+      <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
         {header}
         <ErrorState
           title={errorTitle}
@@ -131,18 +158,24 @@ export default function HomeScreen() {
     );
   }
 
-  const heroEnter = FadeInDown.delay(80).duration(420);
-  const modesEnter = FadeInDown.delay(170).duration(420);
-  const challengeEnter = FadeInDown.delay(250).duration(420);
-  const skillsEnter = FadeInDown.delay(320).duration(420);
-  const recentEnter = FadeInDown.delay(390).duration(420);
+  const heroEnter = FadeInDown.delay(60).duration(420);
+  const modesEnter = FadeInDown.delay(140).duration(420);
+  const challengeEnter = FadeInDown.delay(220).duration(420);
+  const skillsEnter = FadeInDown.delay(300).duration(420);
+  const recentEnter = FadeInDown.delay(380).duration(420);
 
   const skills = metrics ? toPracticeSkills(metrics.skills) : [];
   const sessions = metrics ? toRecentSessions(metrics.recentSessions) : [];
   const todayPrompt = dailyPrompt();
 
+  const formattedDate = new Date().toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 10 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
       {header}
 
       <Animated.ScrollView
@@ -151,8 +184,13 @@ export default function HomeScreen() {
         entering={FadeInDown.delay(0).duration(300)}
       >
         <View style={styles.greetingBlock}>
-          <Text style={styles.greeting}>{greetingForHour(new Date().getHours())}, {firstName}</Text>
-          <Text style={styles.greetingTagline}>Ready for your next interview?</Text>
+          <View style={styles.dateBadge}>
+            <Text style={styles.dateBadgeText}>{formattedDate}</Text>
+          </View>
+          <Text style={styles.greeting}>
+            {greetingForHour(new Date().getHours())}, {firstName}
+          </Text>
+          <Text style={styles.greetingTagline}>Ready for your next interview simulation?</Text>
         </View>
 
         <Animated.View entering={heroEnter}>
@@ -168,15 +206,6 @@ export default function HomeScreen() {
         <Animated.View entering={modesEnter} style={styles.section}>
           <PracticeModes />
         </Animated.View>
-
-        {streak > 0 && (
-          <View style={styles.streakRow}>
-            <Ionicons name="flame" size={16} color={colors.accent} />
-            <Text style={styles.streakText}>
-              {streak} day streak
-            </Text>
-          </View>
-        )}
 
         <Animated.View entering={challengeEnter} style={styles.section}>
           <DailyChallenge
@@ -206,50 +235,75 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 6,
-  },
-  wordmark: {
-    fontSize: 15,
-    fontWeight: "800",
-    letterSpacing: 2.4,
-    color: colors.ink,
-  },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 44,
+    paddingBottom: 48,
   },
   greetingBlock: {
-    marginTop: 24,
+    marginTop: 18,
     marginBottom: 20,
   },
+  dateBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  dateBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.muted,
+    letterSpacing: 0.3,
+    textTransform: "uppercase",
+  },
   greeting: {
-    fontSize: 27,
-    fontWeight: "800",
+    fontSize: 28,
+    fontWeight: "900",
     letterSpacing: -0.7,
     color: colors.ink,
   },
   greetingTagline: {
-    fontSize: 16,
+    fontSize: 15.5,
     color: colors.secondary,
-    marginTop: 5,
+    marginTop: 4,
+    lineHeight: 21,
   },
   section: {
-    marginTop: 32,
+    marginTop: 34,
   },
-  streakRow: {
+  headerStreakBadge: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 26,
+    gap: 4,
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.accentMuted,
   },
-  streakText: {
-    fontSize: 14.5,
+  headerStreakText: {
+    fontSize: 12.5,
+    fontWeight: "800",
+    color: colors.accentDark,
+  },
+  headerActionBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  headerActionText: {
+    fontSize: 12,
     fontWeight: "800",
     color: colors.ink,
   },

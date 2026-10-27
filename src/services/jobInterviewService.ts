@@ -1,4 +1,5 @@
 import { assertSupabaseConfigured } from "@/lib/supabase";
+import { InterviewStartError } from "@/lib/interviewErrors";
 import type {
   GeneratedJobInterview,
   JobInterviewSettings,
@@ -44,6 +45,7 @@ export const jobInterviewService = {
 };
 
 export function getJobInterviewErrorMessage(error: unknown) {
+  if (error instanceof InterviewStartError) return error.message;
   if (error instanceof JobServiceError) {
     if (error.code === "unauthorized") {
       return "Your session expired. Sign in again before retrying.";

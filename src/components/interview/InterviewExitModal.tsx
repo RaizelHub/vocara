@@ -26,7 +26,7 @@ export function InterviewExitModal({ visible, onClose, onLeave }: InterviewExitM
         <Animated.View entering={FadeInDown.duration(260)} style={styles.card}>
           <Text style={styles.title}>Leave interview?</Text>
           <Text style={styles.description}>
-            {"Your current practice session won't be completed."}
+            Saved answers will be available from Resume Interview on Home. An answer you have not uploaded will need to be recorded again.
           </Text>
           <PressableScale onPress={onClose} accessibilityLabel="Keep practicing" style={styles.keepWrap}>
             <Text style={styles.keep}>Keep practicing</Text>

@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -13,8 +13,8 @@ export type DailyChallengeProps = {
 };
 
 /**
- * One focused practice prompt for the day, with a subtle mic cue.
- * Deliberately light — no panel, just a resting block on the canvas.
+ * Daily challenge spotlight card: structured question prompt, difficulty tag,
+ * coaching tip, and clear audio-themed call to action.
  */
 export function DailyChallenge({
   question,
@@ -24,94 +24,144 @@ export function DailyChallenge({
 }: DailyChallengeProps) {
   return (
     <View>
-      <SectionHeader title="Today's challenge" />
-      <View style={styles.row}>
-        <View style={styles.micBubble}>
-          <Ionicons name="mic" size={19} color={colors.accent} />
-        </View>
-        <View style={styles.content}>
-          <View style={styles.topLine}>
-            <Text style={styles.question}>{question}</Text>
+      <SectionHeader
+        title="Today's Challenge"
+        subtitle="Keep your streak active with one quick prompt"
+      />
+
+      <View style={styles.card}>
+        <View style={styles.topRow}>
+          <View style={styles.micBubble}>
+            <Ionicons name="mic" size={20} color={colors.accent} />
+          </View>
+          <View style={styles.badgeRow}>
             <View style={styles.difficultyChip}>
               <Text style={styles.difficultyText}>{difficulty}</Text>
             </View>
           </View>
-          <Text style={styles.support}>{support}</Text>
-          <PressableScale
-            onPress={onStart}
-            accessibilityLabel="Start challenge"
-            collapsed
-            style={styles.startWrap}
-          >
-            <View style={styles.startRow}>
-              <Text style={styles.startLabel}>Start challenge</Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.accent} />
-            </View>
-          </PressableScale>
         </View>
+
+        <Text style={styles.question}>{question}</Text>
+
+        <View style={styles.tipBox}>
+          <Ionicons name="bulb-outline" size={15} color={colors.secondary} style={styles.tipIcon} />
+          <Text style={styles.support}>{support}</Text>
+        </View>
+
+        <PressableScale
+          onPress={onStart}
+          accessibilityLabel="Start daily challenge"
+          activeScale={0.97}
+          style={styles.ctaWrap}
+        >
+          <View style={styles.cta}>
+            <Text style={styles.ctaLabel}>Record your answer</Text>
+            <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
+          </View>
+        </PressableScale>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 16px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
+  },
+  topRow: {
     flexDirection: "row",
-    gap: 14,
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
   micBubble: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#FBEEE9",
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 2,
   },
-  content: {
-    flex: 1,
-  },
-  topLine: {
+  badgeRow: {
     flexDirection: "row",
     alignItems: "center",
-    flexWrap: "wrap",
-    gap: 8,
-    rowGap: 4,
-  },
-  question: {
-    fontSize: 16.5,
-    fontWeight: "800",
-    color: colors.ink,
-    letterSpacing: -0.3,
   },
   difficultyChip: {
     borderRadius: 7,
-    backgroundColor: "#FBF0DC",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    backgroundColor: colors.warningLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   difficultyText: {
     fontSize: 11,
     fontWeight: "800",
     color: "#8A5A0E",
+    letterSpacing: 0.3,
+  },
+  question: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.ink,
+    letterSpacing: -0.3,
+    lineHeight: 23,
+    marginBottom: 12,
+  },
+  tipBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  tipIcon: {
+    marginTop: 1,
   },
   support: {
     fontSize: 13,
+    lineHeight: 18,
     color: colors.secondary,
-    marginTop: 4,
+    flex: 1,
   },
-  startWrap: {
-    marginTop: 10,
-    alignSelf: "flex-start",
+  ctaWrap: {
+    width: "100%",
   },
-  startRow: {
+  cta: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.accent,
     flexDirection: "row",
     alignItems: "center",
-    gap: 2,
+    justifyContent: "center",
+    gap: 8,
   },
-  startLabel: {
-    fontSize: 14.5,
+  ctaLabel: {
+    fontSize: 15,
     fontWeight: "800",
-    color: colors.accent,
+    color: "#FFFFFF",
+    letterSpacing: 0.2,
   },
 });

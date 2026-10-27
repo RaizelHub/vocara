@@ -1,0 +1,39 @@
+project_id = "vocara"
+
+[functions.transcribe-answer]
+verify_jwt = true
+
+[functions.evaluate-answer]
+verify_jwt = true
+
+[functions.transcribe-speaking]
+verify_jwt = true
+
+[functions.evaluate-speaking]
+verify_jwt = true
+
+[functions.finalize-interview]
+verify_jwt = true
+
+[functions.analyze-job]
+verify_jwt = true
+
+[functions.generate-job-interview]
+verify_jwt = true
+
+[functions.process-resume]
+verify_jwt = true
+
+[functions.compare-resume-job]
+verify_jwt = true
+
+[functions.generate-personalized-interview]
+verify_jwt = true
+
+# RevenueCat webhook: no Supabase JWT in the request; authenticated by
+# X-RevenueCat-Signature / Authorization Bearer against REVENUECAT_WEBHOOK_SECRET.
+[functions.revenuecat-webhook]
+verify_jwt = false
+
+[functions.sync-subscription]
+verify_jwt = true

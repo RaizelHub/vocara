@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 import { useAuth } from "../../providers/AuthProvider";
 import { startInterviewSession } from "../../state/session";
 import { interviewSessionService } from "../../services/interviewSessionService";
 import { sampleQuestions } from "../../data/interviewQuestions";
+import { createInterviewStarter, runInterviewInitialization } from "@/lib/interviewStarter";
+import { getDataErrorMessage } from "@/lib/dataErrors";
+import type { InterviewSession, Difficulty, InterviewerStyle } from "@/types/interview";
 import { colors } from "../../theme/colors";
-import type { Difficulty, InterviewerStyle } from "../../types/interview";
 
 const QUICK_QUESTION_BANK_TYPE = "standard" as const;
 const QUICK_QUESTION_COUNT = 1;
@@ -15,46 +17,36 @@ export default function QuickPracticeScreen() {
   const router = useRouter();
   const { user, profile, preferences } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(1);
-  const starting = useRef(false);
+  const starter = useRef<ReturnType<typeof createInterviewStarter<InterviewSession>> | null>(null);
+  const mounted = useRef(false);
+  const start = useCallback(() => {
+    if (!user || starter.current?.busy || starter.current?.completed) return;
+    starter.current ??= createInterviewStarter(() => {
+      const role = profile?.target_role?.trim() || "Software Developer";
+      return startInterviewSession({
+        role, type: QUICK_QUESTION_BANK_TYPE,
+        difficulty: (preferences?.default_difficulty ?? "intermediate") as Difficulty,
+        interviewerStyle: (preferences?.default_interviewer_style ?? "balanced") as InterviewerStyle,
+        length: "quick", totalQuestions: QUICK_QUESTION_COUNT,
+        questions: sampleQuestions(QUICK_QUESTION_BANK_TYPE, role, QUICK_QUESTION_COUNT),
+      });
+    }, session => interviewSessionService.ensureCreated(session, user.id));
+    void runInterviewInitialization(starter.current, {
+      loading: () => setError(null),
+      ready: session => {
+        if (mounted.current) router.replace({ pathname: "/interview/session", params: { id: session.id } });
+      },
+      failed: error => {
+        if (mounted.current) setError(getDataErrorMessage(error, "Could not start Quick Practice. Check your connection and retry."));
+      },
+    });
+  }, [user, profile?.target_role, preferences, router]);
 
   useEffect(() => {
-    if (attempt === 0 || error) return;
-    if (!user) return;
-    if (starting.current) return;
-    starting.current = true;
-    setError(null);
-
-    const role = profile?.target_role?.trim() || "Software Developer";
-    const questions = sampleQuestions(
-      QUICK_QUESTION_BANK_TYPE,
-      role,
-      QUICK_QUESTION_COUNT,
-    );
-
-    const session = startInterviewSession({
-      role,
-      type: QUICK_QUESTION_BANK_TYPE,
-      difficulty: (preferences?.default_difficulty ?? "intermediate") as Difficulty,
-      interviewerStyle: (preferences?.default_interviewer_style ??
-        "balanced") as InterviewerStyle,
-      length: "quick",
-      totalQuestions: QUICK_QUESTION_COUNT,
-      questions,
-    });
-
-    interviewSessionService
-      .ensureCreated(session, user.id)
-      .then(() => {
-        router.replace("/interview/session");
-      })
-      .catch((e) => {
-        starting.current = false;
-        setError(
-          e instanceof Error ? e.message : "Could not start Quick Practice.",
-        );
-      });
-  }, [attempt, error, user, profile?.target_role, preferences, router]);
+    mounted.current = true;
+    start();
+    return () => { mounted.current = false; };
+  }, [start]);
 
   return (
     <>
@@ -68,7 +60,7 @@ export default function QuickPracticeScreen() {
         {error ? (
           <View style={styles.inner}>
             <Text style={styles.error}>{error}</Text>
-            <Text style={styles.retry} onPress={() => setAttempt((a) => a + 1)}>
+            <Text style={styles.retry} accessibilityRole="button" onPress={start}>
               Tap to retry
             </Text>
           </View>

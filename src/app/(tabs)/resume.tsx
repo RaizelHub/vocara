@@ -7,6 +7,7 @@ import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { LiveWaveform } from "@/components/interview/LiveWaveform";
+import { AppHeader } from "@/components/ui/AppHeader";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { colors } from "@/theme/colors";
@@ -162,15 +163,20 @@ export default function ResumeTabScreen() {
     processing;
 
   return (
-    <View style={[styles.screen, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 6 }]}>
+      <AppHeader subtitle="Resume Intelligence" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Resume</Text>
-        <Text style={styles.subtitle}>
-          Upload your resume once and every job interview becomes personal.
-        </Text>
+        <View style={styles.titleBlock}>
+          <Text style={styles.title}>Resume Intelligence</Text>
+          <Text style={styles.subtitle}>
+            Upload your resume once and every practice interview becomes tailored to your experience.
+          </Text>
+        </View>
 
         {loading && (
-          <Text style={styles.stateText}>Loading your resume…</Text>
+          <View style={styles.loadingBox}>
+            <Text style={styles.stateText}>Loading your resume profile…</Text>
+          </View>
         )}
 
         {!loading && error && (
@@ -181,17 +187,35 @@ export default function ResumeTabScreen() {
         )}
 
         {!loading && !error && !resume && (
-          <Animated.View entering={FadeInDown.duration(320)}>
+          <Animated.View entering={FadeInDown.duration(360)}>
             <View style={styles.emptyCard}>
-              <Ionicons name="document-text-outline" size={34} color={colors.muted} />
-              <Text style={styles.emptyTitle}>No resume yet</Text>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="document-text-outline" size={36} color={colors.accent} />
+              </View>
+              <Text style={styles.emptyTitle}>Upload your resume</Text>
               <Text style={styles.emptyText}>
-                Add a PDF of your resume and Vocara will analyze your skills, experience, and
-                strengths — then use them to tailor your interview practice.
+                Vocara will extract your skills, roles, and strengths — tailoring every interview question and evaluation to your exact profile.
               </Text>
+
+              <View style={styles.benefitsRow}>
+                <View style={styles.benefitChip}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={styles.benefitText}>Role-specific prompts</Text>
+                </View>
+                <View style={styles.benefitChip}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={styles.benefitText}>Match scoring</Text>
+                </View>
+                <View style={styles.benefitChip}>
+                  <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+                  <Text style={styles.benefitText}>Instant coaching</Text>
+                </View>
+              </View>
+
               <View style={styles.emptyCta}>
                 <PrimaryButton
-                  label={picking ? "Opening picker…" : "Upload resume (PDF)"}
+                  label={picking ? "Opening file picker…" : "Upload PDF Resume"}
+                  icon="cloud-upload-outline"
                   onPress={() => void pickAndUpload()}
                   disabled={picking || processing}
                 />
@@ -201,10 +225,10 @@ export default function ResumeTabScreen() {
         )}
 
         {!loading && !error && resume && (
-          <Animated.View entering={FadeInDown.duration(320)}>
+          <Animated.View entering={FadeInDown.duration(360)}>
             <View style={styles.fileCard}>
               <View style={styles.fileIcon}>
-                <Ionicons name="document-text" size={18} color={colors.accentDark} />
+                <Ionicons name="document-text" size={22} color={colors.accentDark} />
               </View>
               <View style={styles.fileInfo}>
                 <Text style={styles.fileName} numberOfLines={1}>
@@ -215,11 +239,22 @@ export default function ResumeTabScreen() {
                   {resume.analysis_version ? ` · v${resume.analysis_version}` : ""}
                 </Text>
               </View>
+              <PressableScale
+                onPress={() => void pickAndUpload()}
+                disabled={picking || processing}
+                accessibilityLabel="Replace resume"
+                collapsed
+                activeScale={0.92}
+              >
+                <View style={styles.replaceBtn}>
+                  <Ionicons name="refresh-outline" size={16} color={colors.secondary} />
+                </View>
+              </PressableScale>
             </View>
 
             {processingActive && (
               <View style={styles.processingCard}>
-                <LiveWaveform active barCount={18} height={30} intensity={0.45} />
+                <LiveWaveform active barCount={22} height={36} intensity={0.6} />
                 <Text style={styles.processingText}>{PROCESSING_STAGES[stage]}</Text>
               </View>
             )}
@@ -241,9 +276,10 @@ export default function ResumeTabScreen() {
                   onPress={() => void pickAndUpload()}
                   disabled={picking || processing}
                   accessibilityLabel="Upload a different PDF"
+                  activeScale={0.97}
                   style={styles.secondaryButton}
                 >
-                  <Ionicons name="arrow-up-circle-outline" size={15} color={colors.accentDark} />
+                  <Ionicons name="arrow-up-circle-outline" size={16} color={colors.accentDark} />
                   <Text style={styles.secondaryLabel}>Upload a different PDF</Text>
                 </PressableScale>
               </View>
@@ -253,22 +289,34 @@ export default function ResumeTabScreen() {
               <>
                 <View style={styles.heroCard}>
                   <Text style={styles.heroRole}>
-                    {analysis.currentOrLatestRole ?? "Your resume"}
+                    {analysis.currentOrLatestRole ?? "Your Profile"}
                   </Text>
-                  <Text style={styles.heroMeta}>
-                    {RESUME_SENIORITY_LABELS[analysis.seniorityLevel]}
-                    {analysis.yearsExperienceEstimate != null
-                      ? ` · ~${analysis.yearsExperienceEstimate} yrs experience`
-                      : ""}
-                  </Text>
+                  <View style={styles.heroBadgesRow}>
+                    <View style={styles.seniorityBadge}>
+                      <Text style={styles.seniorityText}>
+                        {RESUME_SENIORITY_LABELS[analysis.seniorityLevel]}
+                      </Text>
+                    </View>
+                    {analysis.yearsExperienceEstimate != null && (
+                      <View style={styles.expBadge}>
+                        <Text style={styles.expText}>
+                          ~{analysis.yearsExperienceEstimate} yrs experience
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                 </View>
 
-                <Text style={styles.sectionLabel}>Summary</Text>
-                <Text style={styles.summaryText}>{analysis.professionalSummary}</Text>
+                <View style={styles.sectionWrap}>
+                  <Text style={styles.sectionLabel}>Executive Summary</Text>
+                  <View style={styles.summaryCard}>
+                    <Text style={styles.summaryText}>{analysis.professionalSummary}</Text>
+                  </View>
+                </View>
 
                 {analysis.skills.length > 0 && (
-                  <>
-                    <Text style={styles.sectionLabel}>Skills on your resume</Text>
+                  <View style={styles.sectionWrap}>
+                    <Text style={styles.sectionLabel}>Skills Extracted</Text>
                     <View style={styles.chipWrap}>
                       {analysis.skills.map((skill) => (
                         <View key={`${skill.name}-${skill.category}`} style={styles.chip}>
@@ -276,87 +324,94 @@ export default function ResumeTabScreen() {
                         </View>
                       ))}
                     </View>
-                  </>
+                  </View>
                 )}
 
                 {analysis.strengths.length > 0 && (
-                  <>
-                    <Text style={styles.sectionLabel}>Strengths</Text>
-                    <View style={styles.bulletList}>
+                  <View style={styles.sectionWrap}>
+                    <Text style={styles.sectionLabel}>Core Strengths</Text>
+                    <View style={styles.strengthList}>
                       {analysis.strengths.map((strength) => (
-                        <View key={strength} style={styles.bulletRow}>
-                          <Ionicons name="ellipse" size={7} color={colors.accent} />
-                          <Text style={styles.bulletText}>{strength}</Text>
+                        <View key={strength} style={styles.strengthRow}>
+                          <View style={styles.strengthIconWrap}>
+                            <Ionicons name="checkmark" size={13} color={colors.success} />
+                          </View>
+                          <Text style={styles.strengthText}>{strength}</Text>
                         </View>
                       ))}
                     </View>
-                  </>
+                  </View>
                 )}
               </>
             )}
 
-            <Text style={styles.sectionLabel}>Compare with a saved job</Text>
-            {jobsError && <Text style={styles.stateText}>{jobsError}</Text>}
-            {savedJobs.length === 0 && !jobsError && (
-              <Text style={styles.stateText}>
-                No saved job descriptions yet. Add one from the Job-Specific Interview flow and
-                compare it against your resume here.
-              </Text>
-            )}
-            <View style={styles.jobList}>
-              {savedJobs.map((job) => {
-                const score = matchScores[job.id];
-                return (
-                  <PressableScale
-                    key={job.id}
-                    onPress={() => {
-                      if (!resume || resume.processing_status !== "completed") {
-                        setError(
-                          resume
-                            ? "Analyze your resume before comparing it to a job."
-                            : "Upload a resume before comparing it to a job.",
-                        );
-                        return;
-                      }
-                      router.push({
-                        pathname: "/resume/match",
-                        params: { resumeId: resume.id, jobId: job.id },
-                      } as Href);
-                    }}
-                    accessibilityLabel={`Compare resume with ${job.title ?? "saved job"}`}
-                    style={styles.jobRow}
-                  >
-                    <View style={styles.jobInfo}>
-                      <Text style={styles.jobTitle} numberOfLines={1}>
-                        {job.title ?? "Saved job description"}
-                      </Text>
-                      {job.companyName && (
-                        <Text style={styles.jobMeta} numberOfLines={1}>
-                          {job.companyName}
+            <View style={styles.sectionWrap}>
+              <Text style={styles.sectionLabel}>Compare with a Saved Job</Text>
+              {jobsError && <Text style={styles.stateText}>{jobsError}</Text>}
+              {savedJobs.length === 0 && !jobsError && (
+                <View style={styles.noJobsCard}>
+                  <Ionicons name="briefcase-outline" size={22} color={colors.muted} />
+                  <Text style={styles.noJobsText}>
+                    No saved jobs yet. Add a job description from the Practice tab to compare your resume against job requirements.
+                  </Text>
+                </View>
+              )}
+              <View style={styles.jobList}>
+                {savedJobs.map((job) => {
+                  const score = matchScores[job.id];
+                  return (
+                    <PressableScale
+                      key={job.id}
+                      onPress={() => {
+                        if (!resume || resume.processing_status !== "completed") {
+                          setError(
+                            resume
+                              ? "Analyze your resume before comparing it to a job."
+                              : "Upload a resume before comparing it to a job.",
+                          );
+                          return;
+                        }
+                        router.push({
+                          pathname: "/resume/match",
+                          params: { resumeId: resume.id, jobId: job.id },
+                        } as Href);
+                      }}
+                      accessibilityLabel={`Compare resume with ${job.title ?? "saved job"}`}
+                      activeScale={0.98}
+                      style={styles.jobRow}
+                    >
+                      <View style={styles.jobInfo}>
+                        <Text style={styles.jobTitle} numberOfLines={1}>
+                          {job.title ?? "Saved job description"}
                         </Text>
+                        {job.companyName && (
+                          <Text style={styles.jobMeta} numberOfLines={1}>
+                            {job.companyName}
+                          </Text>
+                        )}
+                      </View>
+                      {score != null ? (
+                        <View
+                          style={[
+                            styles.scoreBadge,
+                            score >= 75
+                              ? styles.scoreStrong
+                              : score >= 50
+                                ? styles.scorePartial
+                                : styles.scoreWeak,
+                          ]}
+                        >
+                          <Text style={styles.scoreText}>{score}% match</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.scorePlaceholder}>
+                          <Text style={styles.scorePlaceholderText}>Compare →</Text>
+                        </View>
                       )}
-                    </View>
-                    {score != null ? (
-                      <View
-                        style={[
-                          styles.scoreBadge,
-                          score >= 75
-                            ? styles.scoreStrong
-                            : score >= 50
-                              ? styles.scorePartial
-                              : styles.scoreWeak,
-                        ]}
-                      >
-                        <Text style={styles.scoreText}>{score}%</Text>
-                      </View>
-                    ) : (
-                      <View style={styles.scorePlaceholder}>
-                        <Text style={styles.scorePlaceholderText}>Compare</Text>
-                      </View>
-                    )}
-                  </PressableScale>
-                );
-              })}
+                    </PressableScale>
+                  );
+                })}
+              </View>
             </View>
           </Animated.View>
         )}
@@ -370,13 +425,13 @@ function statusLabel(status: string) {
     case "uploaded":
       return "Uploaded";
     case "extracting":
-      return "Extracting text";
+      return "Extracting text…";
     case "analyzing":
-      return "Analyzing";
+      return "Analyzing skills…";
     case "completed":
-      return "Analyzed";
+      return "Ready & Analyzed";
     case "extract_failed":
-      return "Couldn't read this PDF";
+      return "Couldn't read PDF";
     case "failed":
       return "Analysis failed";
     default:
@@ -395,74 +450,142 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 12,
     paddingBottom: 48,
+  },
+  titleBlock: {
+    marginTop: 14,
+    marginBottom: 20,
   },
   title: {
     fontSize: 28,
-    fontWeight: "800",
+    fontWeight: "900",
     letterSpacing: -0.7,
     color: colors.ink,
   },
   subtitle: {
-    fontSize: 15.5,
-    lineHeight: 22,
+    fontSize: 15,
+    lineHeight: 21,
     color: colors.secondary,
-    marginTop: 5,
-    marginBottom: 4,
+    marginTop: 4,
+  },
+  loadingBox: {
+    paddingVertical: 32,
+    alignItems: "center",
   },
   stateText: {
-    fontSize: 14.5,
-    lineHeight: 21,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.secondary,
   },
   stateCard: {
-    marginTop: 26,
-    gap: 16,
+    marginTop: 20,
+    gap: 14,
     marginBottom: 10,
   },
   emptyCard: {
-    marginTop: 26,
+    marginTop: 16,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    padding: 22,
+    borderColor: colors.borderSubtle,
+    borderRadius: 24,
+    padding: 24,
     alignItems: "center",
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 16px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
+  },
+  emptyIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.accentLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
   },
   emptyTitle: {
     fontSize: 19,
-    fontWeight: "800",
+    fontWeight: "900",
     color: colors.ink,
-    marginTop: 12,
   },
   emptyText: {
     fontSize: 14,
-    lineHeight: 20.5,
+    lineHeight: 20,
     color: colors.secondary,
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 6,
+    maxWidth: 300,
+  },
+  benefitsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  benefitChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.surfaceSubtle,
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  benefitText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.ink,
   },
   emptyCta: {
     alignSelf: "stretch",
-    marginTop: 22,
   },
   fileCard: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 14,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 18,
-    padding: 14,
-    marginTop: 18,
+    borderColor: colors.borderSubtle,
+    borderRadius: 20,
+    padding: 16,
+    marginTop: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 3 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 3px 12px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   fileIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: "#FBEEE9",
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -470,24 +593,32 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   fileName: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: "800",
     color: colors.ink,
   },
   fileMeta: {
     fontSize: 12.5,
     fontWeight: "700",
-    color: colors.muted,
+    color: colors.accentDark,
     marginTop: 3,
   },
-  processingCard: {
-    marginTop: 14,
+  replaceBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceSubtle,
     alignItems: "center",
-    gap: 14,
-    paddingVertical: 10,
+    justifyContent: "center",
+  },
+  processingCard: {
+    marginTop: 16,
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14,
   },
   processingText: {
-    fontSize: 15,
+    fontSize: 14.5,
     fontWeight: "700",
     color: colors.secondary,
     textAlign: "center",
@@ -495,35 +626,85 @@ const styles = StyleSheet.create({
   heroCard: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 20,
-    padding: 18,
+    borderColor: colors.borderSubtle,
+    borderRadius: 22,
+    padding: 20,
     marginTop: 18,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   heroRole: {
-    fontSize: 21,
-    fontWeight: "800",
+    fontSize: 22,
+    fontWeight: "900",
     letterSpacing: -0.4,
     color: colors.ink,
   },
-  heroMeta: {
-    fontSize: 13.5,
+  heroBadgesRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  seniorityBadge: {
+    backgroundColor: colors.accentLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  seniorityText: {
+    fontSize: 11.5,
+    fontWeight: "800",
+    color: colors.accentDark,
+  },
+  expBadge: {
+    backgroundColor: colors.surfaceSubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  expText: {
+    fontSize: 11.5,
     fontWeight: "700",
-    color: colors.muted,
-    marginTop: 5,
+    color: colors.secondary,
+  },
+  sectionWrap: {
+    marginTop: 26,
   },
   sectionLabel: {
-    marginTop: 26,
     marginBottom: 12,
-    fontSize: 12.5,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1,
     textTransform: "uppercase",
     color: colors.muted,
   },
+  summaryCard: {
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 18,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.accent,
+  },
   summaryText: {
-    fontSize: 15,
-    lineHeight: 22.5,
+    fontSize: 14.5,
+    lineHeight: 22,
     color: colors.ink,
   },
   chipWrap: {
@@ -532,29 +713,61 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    backgroundColor: "#FBEEE9",
+    backgroundColor: colors.surface,
     borderRadius: 10,
-    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: 13,
     paddingVertical: 7,
   },
   chipText: {
     fontSize: 13,
     fontWeight: "700",
-    color: colors.accentDark,
+    color: colors.ink,
   },
-  bulletList: {
-    gap: 9,
+  strengthList: {
+    gap: 10,
   },
-  bulletRow: {
+  strengthRow: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 9,
+    gap: 10,
+    backgroundColor: colors.surface,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
   },
-  bulletText: {
+  strengthIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.successLight,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  strengthText: {
     flex: 1,
-    fontSize: 14.5,
-    lineHeight: 20.5,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.ink,
+  },
+  noJobsCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 16,
+  },
+  noJobsText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.secondary,
   },
   jobList: {
     gap: 10,
@@ -565,10 +778,25 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 16,
+    borderColor: colors.borderSubtle,
+    borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      android: {
+        elevation: 1,
+      },
+      web: {
+        boxShadow: "0 2px 8px rgba(21, 21, 21, 0.03)",
+      },
+      default: {},
+    }),
   },
   jobInfo: {
     flex: 1,
@@ -579,29 +807,28 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   jobMeta: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.muted,
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: colors.secondary,
     marginTop: 2,
   },
   scoreBadge: {
-    minWidth: 56,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
     alignItems: "center",
   },
   scoreStrong: {
-    backgroundColor: "#E7F5EE",
+    backgroundColor: colors.successLight,
   },
   scorePartial: {
-    backgroundColor: "#FDF1DF",
+    backgroundColor: colors.warningLight,
   },
   scoreWeak: {
-    backgroundColor: "#FBEEE9",
+    backgroundColor: colors.accentLight,
   },
   scoreText: {
-    fontSize: 14,
+    fontSize: 12.5,
     fontWeight: "800",
     color: colors.ink,
   },
@@ -617,15 +844,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    gap: 8,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    paddingVertical: 13,
+    borderColor: colors.borderSubtle,
+    borderRadius: 24,
+    height: 48,
   },
   secondaryLabel: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: "800",
     color: colors.accentDark,
   },

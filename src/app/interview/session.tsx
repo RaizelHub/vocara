@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, type Href } from "expo-router";
+import { router, type Href, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import Animated, { FadeIn, FadeInDown, FadeOutUp } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,6 +26,9 @@ import { RecordingControls } from "@/components/interview/RecordingControls";
 import { ThinkTimer } from "@/components/interview/ThinkTimer";
 import { TranscriptPreview } from "@/components/interview/TranscriptPreview";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { ErrorState, LoadingState } from "@/components/ui/DataState";
+import { PrimaryButton } from "@/components/ui/PrimaryButton";
+import { planInterviewRecovery, recoverySession, type InterviewRecovery } from "@/lib/interviewRecovery";
 import {
   getRecorderErrorMessage,
   MicrophonePermissionError,
@@ -60,6 +63,7 @@ import {
   canRetryTranscription,
   getTranscriptionErrorMessage,
   transcriptionService,
+  TranscriptionError,
   transcriptionRequiresAuthentication,
   type TranscriptionResult,
 } from "@/services/transcriptionService";
@@ -70,6 +74,7 @@ import {
   THINK_SECONDS,
   WRAP_UP_AFTER_SECONDS,
   type SessionState,
+  type InterviewSession,
 } from "@/types/interview";
 
 type FailureStage =
@@ -142,7 +147,7 @@ function evaluationFailureFor(error: unknown): RoomFailure {
       : getEvaluationErrorMessage(error),
     retryable: canRetryEvaluation(error),
     requiresAuth: evaluationRequiresAuthentication(error) || isAuthenticationError(error),
-    code: dailyLimit ? "daily_limit_reached" : undefined,
+    code: error instanceof EvaluationError ? error.code : undefined,
   };
 }
 
@@ -160,10 +165,68 @@ function finalizationFailureFor(error: unknown): RoomFailure {
 }
 
 export default function InterviewSessionScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const sessionId = id ?? getInterviewSession()?.id;
+  const [data, setData] = useState<InterviewRecovery | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [waiting, setWaiting] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let resumed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const load = async () => {
+      try {
+        const saved = await interviewSessionService.recover(sessionId);
+        if (!active) return;
+        if (!saved) throw new Error('No saved interview was found. Return home to start one.');
+        const plan = planInterviewRecovery(saved);
+        if (plan.kind === 'completed') {
+          router.replace({ pathname: '/interview/results', params: { id: saved.session.id } });
+          return;
+        }
+        if (!resumed) {
+          await interviewSessionService.resume(saved.session.id);
+          resumed = true;
+        }
+        if (!active) return;
+        setData(saved);
+        setError(null);
+        if (plan.kind === 'waiting') {
+          setReady(false);
+          setWaiting(plan.message);
+          timer = setTimeout(() => void load(), 5000);
+        } else {
+          setWaiting(null);
+          setReady(true);
+        }
+      } catch (e) {
+        if (active) {
+          setReady(false);
+          setWaiting(null);
+          setError(e instanceof Error ? e.message : 'Could not restore your interview. Check your connection and retry.');
+        }
+      }
+    };
+    void load();
+    return () => { active = false; clearTimeout(timer); };
+  }, [sessionId, retry]);
+  const plan = data ? planInterviewRecovery(data) : null;
+  if (ready && data && (!sessionId || data.session.id === sessionId) && plan?.kind === 'room') {
+    return <InterviewRoom key={data.session.id} session={recoverySession(data)} initialState={plan.state} />;
+  }
+  return <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.background }}>
+    {error ? <ErrorState title="Resume interview" message={error} onRetry={() => { setError(null); setRetry(n => n + 1); }} />
+      : <LoadingState label={waiting ?? 'Restoring saved interview…'} />}
+    <PrimaryButton label="Back to home" onPress={() => router.replace('/home')} />
+  </View>;
+}
+
+function InterviewRoom({ session, initialState }: { session: InterviewSession; initialState: RoomState }) {
   const insets = useSafeAreaInsets();
-  const session = getInterviewSession();
   const { user, signOut } = useAuth();
-  const [state, dispatch] = useReducer(roomReducer, undefined, () => createInitialState());
+  const [state, dispatch] = useReducer(roomReducer, initialState);
   const [exitVisible, setExitVisible] = useState(false);
   const operationInFlight = useRef(false);
   const screenGeneration = useRef(0);
@@ -387,6 +450,7 @@ export default function InterviewSessionScreen() {
         sizeBytes: uploaded.sizeBytes,
       });
       attached = true;
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "transcribing",
@@ -428,6 +492,7 @@ export default function InterviewSessionScreen() {
               : {
                   stage: "transcription",
                   message: getTranscriptionErrorMessage(error),
+                code: error instanceof TranscriptionError ? error.code : undefined,
                   retryable: canRetryTranscription(error),
                   requiresAuth:
                     transcriptionRequiresAuthentication(error) || isAuthenticationError(error),
@@ -452,22 +517,26 @@ export default function InterviewSessionScreen() {
   const retryTranscription = useCallback(async () => {
     if (operationInFlight.current || !state.answer) return;
     operationInFlight.current = true;
+    const expectedScreenGeneration = screenGeneration.current;
     dispatch({ type: "transition", phase: "transcribing", values: { failure: null } });
     let transcript: TranscriptionResult | null = null;
     try {
       transcript = await transcriptionService.transcribe(state.answer.id);
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "evaluating",
         values: { transcript, failure: null },
       });
       const evaluation = await evaluationService.evaluateAnswer(state.answer.id);
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "transcribed",
         values: { transcript, evaluation, failure: null },
       });
     } catch (error) {
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "error",
@@ -477,6 +546,7 @@ export default function InterviewSessionScreen() {
             : {
                 stage: "transcription",
                 message: getTranscriptionErrorMessage(error),
+                code: error instanceof TranscriptionError ? error.code : undefined,
                 retryable: canRetryTranscription(error),
                 requiresAuth:
                   transcriptionRequiresAuthentication(error) || isAuthenticationError(error),
@@ -491,15 +561,18 @@ export default function InterviewSessionScreen() {
   const retryEvaluation = useCallback(async () => {
     if (operationInFlight.current || !state.answer || !state.transcript) return;
     operationInFlight.current = true;
+    const expectedScreenGeneration = screenGeneration.current;
     dispatch({ type: "transition", phase: "evaluating", values: { failure: null } });
     try {
       const evaluation = await evaluationService.evaluateAnswer(state.answer.id);
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "transcribed",
         values: { evaluation, failure: null },
       });
     } catch (error) {
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "error",
@@ -570,14 +643,17 @@ export default function InterviewSessionScreen() {
   const retryFinalization = useCallback(async () => {
     if (operationInFlight.current || !session) return;
     operationInFlight.current = true;
+    const expectedScreenGeneration = screenGeneration.current;
     dispatch({ type: "transition", phase: "finalizing", values: { failure: null } });
     try {
       const result = await finalizationService.finalizeInterview(session.id);
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       router.replace({
         pathname: "/interview/results",
         params: { id: result.sessionId },
       } as Href);
     } catch (error) {
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       if (error instanceof FinalizationError && error.code === "already_finalized") {
         router.replace({
           pathname: "/interview/results",
@@ -599,13 +675,9 @@ export default function InterviewSessionScreen() {
     screenGeneration.current += 1;
     uploadAbortController.current?.abort();
     setExitVisible(false);
-    const sessionId = session?.id;
     resetInterviewSession();
-    void (sessionId
-      ? interviewSessionService.abandon(sessionId).catch(() => undefined)
-      : Promise.resolve()
-    ).finally(() => router.replace("/home"));
-  }, [session]);
+    router.replace("/home");
+  }, []);
 
   const handleReauthenticate = useCallback(() => {
     screenGeneration.current += 1;
@@ -781,6 +853,8 @@ export default function InterviewSessionScreen() {
             onPrimary={
               state.failure.requiresAuth
                 ? handleReauthenticate
+                : state.failure.code === "answer_retry_exhausted"
+                  ? handleLeave
                 : state.failure.stage === "upload"
                 ? state.failure.retryable === false
                   ? () => void handleRecordAgain()
@@ -805,6 +879,7 @@ export default function InterviewSessionScreen() {
                         : () => void handleRecordAgain()
             }
             onRecordAgain={
+              state.failure.code === "answer_retry_exhausted" ||
               state.failure.stage === "completion" ||
               state.failure.stage === "finalization" ||
               state.failure.code === "daily_limit_reached" ||
@@ -873,6 +948,8 @@ function AnswerErrorState({
             : "Recorder unavailable";
   const primaryLabel = failure.requiresAuth
     ? "Return to sign in"
+    : failure.code === "answer_retry_exhausted"
+      ? "Back to home"
     : upload
     ? failure.retryable === false
       ? "Record again"

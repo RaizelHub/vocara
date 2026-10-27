@@ -1,4 +1,7 @@
+import { InterviewStartError } from "./interviewErrors";
+
 export function getDataErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof InterviewStartError) return error.message;
   if (__DEV__) console.error("[VOCARA data]", error);
 
   const message = error instanceof Error ? error.message.toLowerCase() : "";

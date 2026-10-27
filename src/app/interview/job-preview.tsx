@@ -195,7 +195,7 @@ export default function JobPreviewScreen() {
       });
       await interviewSessionService.ensureCreated(nextSession, user.id);
       startedSessionId.current = generated.session.id;
-      router.replace("/interview/session" as Href);
+      router.replace({ pathname: "/interview/session", params: { id: nextSession.id } } as Href);
     } catch (error) {
       setGenerationError(
         getJobInterviewErrorMessage(error),

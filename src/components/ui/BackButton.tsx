@@ -1,5 +1,7 @@
-import { Pressable, StyleSheet, Text } from "react-native";
+import { StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
+import { PressableScale } from "@/components/ui/PressableScale";
 import { colors } from "@/theme/colors";
 
 export type BackButtonProps = {
@@ -8,49 +10,49 @@ export type BackButtonProps = {
 };
 
 /**
- * The shared circular back control: a quiet white pill with a hairline
- * border and a soft press state.
+ * The shared circular back control: a refined white pill with a hairline
+ * border and tactile spring feedback.
  */
 export function BackButton({
   onPress,
   accessibilityLabel = "Go back",
 }: BackButtonProps) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel}
-      hitSlop={8}
+    <PressableScale
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        pressed && styles.buttonPressed,
-      ]}
+      accessibilityLabel={accessibilityLabel}
+      collapsed
+      activeScale={0.92}
+      style={styles.wrap}
     >
-      <Text style={styles.glyph}>‹</Text>
-    </Pressable>
+      <View style={styles.button}>
+        <Ionicons name="chevron-back" size={20} color={colors.ink} style={styles.icon} />
+      </View>
+    </PressableScale>
   );
 }
 
 const styles = StyleSheet.create({
+  wrap: {
+    width: 42,
+    height: 42,
+  },
   button: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#151515",
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
-  buttonPressed: {
-    backgroundColor: colors.background,
-  },
-  glyph: {
-    fontSize: 30,
-    lineHeight: 32,
-    fontWeight: "400",
-    color: colors.ink,
-    marginTop: -3,
-    marginRight: 2,
+  icon: {
+    marginRight: 1,
   },
 });

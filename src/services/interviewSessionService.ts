@@ -1,83 +1,40 @@
 import { assertSupabaseConfigured, supabase } from "@/lib/supabase";
+import { interviewStartError } from "@/lib/interviewErrors";
+import type { InterviewRecovery } from "@/lib/interviewRecovery";
 import type { InterviewSession } from "@/types/interview";
 
 export const interviewSessionService = {
-  async ensureCreated(session: InterviewSession, userId: string) {
+  async ensureCreated(session: InterviewSession, _userId: string) {
     assertSupabaseConfigured();
 
-    const existing = await supabase
-      .from("interview_sessions")
-      .select("id")
-      .eq("id", session.id)
-      .maybeSingle();
-
-    if (existing.error) throw existing.error;
-
-    if (!existing.data) {
-      const { error } = await supabase.from("interview_sessions").insert({
-        id: session.id,
-        user_id: userId,
-        role: session.role.trim(),
-        interview_type: session.type,
-        difficulty: session.difficulty,
-        interviewer_style: session.interviewerStyle,
-        status: "in_progress",
-        total_questions: session.totalQuestions,
-        started_at: new Date().toISOString(),
-      });
-
-      if (error && error.code !== "23505") throw error;
-    }
-
-    const questionResult = await supabase
-      .from("interview_questions")
-      .select("id,question_number,question_text")
-      .eq("session_id", session.id);
-
-    if (questionResult.error) throw questionResult.error;
-
-    if (session.type === "job_specific") {
-      const questionsById = new Map(
-        (questionResult.data ?? []).map((question) => [question.id, question]),
-      );
-      const matchesGeneratedSession =
-        questionResult.data?.length === session.questionIds.length &&
-        session.questionIds.every((id, index) => {
-          const question = questionsById.get(id);
-          return (
-            question?.question_number === index + 1 &&
-            question.question_text === session.questions[index]
-          );
+    // The RPC performs creation and full-session allowance reservation in one
+    // transaction. Generated job/resume sessions already have server questions.
+    const { error } = session.type === "job_specific"
+      ? await supabase.rpc("start_interview_session", { p_session_id: session.id })
+      : await supabase.rpc("create_reserved_interview", {
+          p_session_id: session.id,
+          p_role: session.role,
+          p_type: session.type,
+          p_difficulty: session.difficulty,
+          p_style: session.interviewerStyle,
+          p_questions: session.questions.map((text, index) => ({ id: session.questionIds[index], text })),
         });
-      if (!matchesGeneratedSession) {
-        throw new Error("The generated questions no longer match this interview session.");
-      }
-    }
+    if (error) throw interviewStartError(error);
+  },
 
-    const existingIds = new Set((questionResult.data ?? []).map((row) => row.id));
-    const missingQuestions = session.type === "job_specific" ? [] : session.questions.flatMap((questionText, index) => {
-      const id = session.questionIds[index];
-      if (!id || existingIds.has(id)) return [];
-      return [
-        {
-          id,
-          session_id: session.id,
-          question_number: index + 1,
-          question_text: questionText,
-          question_type: session.type,
-        },
-      ];
+  async recover(sessionId?: string): Promise<InterviewRecovery | null> {
+    assertSupabaseConfigured();
+    const { data, error } = await supabase.rpc("get_interview_recovery", {
+      ...(sessionId ? { p_session_id: sessionId } : {}),
     });
+    if (error) throw error;
+    return data as unknown as InterviewRecovery | null;
+  },
 
-    if (missingQuestions.length > 0) {
-      const { error } = await supabase.from("interview_questions").insert(missingQuestions);
-      if (error && error.code !== "23505") throw error;
-    }
-
-    const { error: startError } = await supabase.rpc("start_interview_session", {
-      p_session_id: session.id,
-    });
-    if (startError) throw startError;
+  async resume(sessionId: string) {
+    assertSupabaseConfigured();
+    const { error } = await supabase.rpc("start_interview_session", { p_session_id: sessionId });
+    if (error) throw interviewStartError(error);
   },
 
   async abandon(sessionId: string) {

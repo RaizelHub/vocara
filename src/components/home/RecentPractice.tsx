@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, type Href } from "expo-router";
 
@@ -24,11 +24,12 @@ function SessionRow({ session }: SessionSummaryProps) {
     <PressableScale
       onPress={() => router.push(`/interview/result/${session.id}` as Href)}
       accessibilityLabel={`${session.title}, score ${session.score}, ${session.date}`}
+      activeScale={0.98}
       style={styles.rowWrap}
     >
       <View style={styles.row}>
         <View style={styles.iconBubble}>
-          <Ionicons name={TYPE_ICONS[session.type]} size={17} color={colors.accent} />
+          <Ionicons name={TYPE_ICONS[session.type]} size={18} color={colors.accent} />
         </View>
         <View style={styles.meta}>
           <Text style={styles.title} numberOfLines={1}>
@@ -38,9 +39,11 @@ function SessionRow({ session }: SessionSummaryProps) {
             {session.type} · {session.date}
           </Text>
         </View>
-        <Text style={styles.score} accessibilityLabel={`Score ${session.score}`}>
-          {session.score}
-        </Text>
+        <View style={styles.scorePill}>
+          <Text style={styles.scoreText} accessibilityLabel={`Score ${session.score}`}>
+            {session.score}%
+          </Text>
+        </View>
         <Ionicons name="chevron-forward" size={16} color={colors.muted} />
       </View>
     </PressableScale>
@@ -53,17 +56,19 @@ function EmptyState() {
       <View style={styles.emptyIcon}>
         <Ionicons name="mic" size={24} color={colors.accent} />
       </View>
-      <Text style={styles.emptyTitle}>Your first practice starts here.</Text>
+      <Text style={styles.emptyTitle}>Your first practice starts here</Text>
       <Text style={styles.emptyDesc}>
-        Complete one interview and Vocara will begin tracking your progress.
+        Complete one interview and Vocara will begin tracking your scores and progress.
       </Text>
       <PressableScale
         onPress={() => router.push("/interview/setup")}
         accessibilityLabel="Start first interview"
+        activeScale={0.96}
         style={styles.emptyCta}
       >
         <View style={styles.emptyCtaInner}>
           <Text style={styles.emptyCtaLabel}>Start first interview</Text>
+          <Ionicons name="arrow-forward" size={15} color="#FFFFFF" />
         </View>
       </PressableScale>
     </View>
@@ -75,14 +80,17 @@ export type RecentPracticeProps = {
 };
 
 /**
- * Compact rows of past sessions — one line per session, no big cards.
+ * Compact rows of past sessions with clear scores and comfortable touch targets.
  */
 export function RecentPractice({ sessions }: RecentPracticeProps) {
   const hasSessions = sessions.length > 0;
 
   return (
     <View>
-      <SectionHeader title="Recent practice" />
+      <SectionHeader
+        title="Recent Practice"
+        subtitle="Review past performance and detailed feedback"
+      />
       {hasSessions ? (
         <View style={styles.list}>
           {sessions.map((session, i) => (
@@ -102,15 +110,30 @@ export function RecentPractice({ sessions }: RecentPracticeProps) {
 const styles = StyleSheet.create({
   list: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     paddingHorizontal: 16,
     paddingVertical: 4,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   separator: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderSubtle,
   },
   rowWrap: {
     paddingVertical: 14,
@@ -121,10 +144,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   iconBubble: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: 13,
-    backgroundColor: "#FBEEE9",
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -142,29 +165,50 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     marginTop: 2,
   },
-  score: {
-    fontSize: 16,
+  scorePill: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: colors.accentLight,
+  },
+  scoreText: {
+    fontSize: 13,
     fontWeight: "800",
-    color: colors.accent,
+    color: colors.accentDark,
     fontVariant: ["tabular-nums"],
   },
   empty: {
     alignItems: "center",
-    paddingVertical: 34,
-    borderRadius: 20,
+    paddingVertical: 36,
+    borderRadius: 24,
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 28,
+    borderColor: colors.borderSubtle,
+    paddingHorizontal: 24,
+    ...Platform.select({
+      ios: {
+        shadowColor: "#151515",
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+      },
+      android: {
+        elevation: 2,
+      },
+      web: {
+        boxShadow: "0 4px 14px rgba(21, 21, 21, 0.04)",
+      },
+      default: {},
+    }),
   },
   emptyIcon: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: "#FBEEE9",
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: colors.accentLight,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
   emptyTitle: {
     fontSize: 17,
@@ -179,22 +223,24 @@ const styles = StyleSheet.create({
     color: colors.secondary,
     textAlign: "center",
     marginTop: 6,
-    maxWidth: 290,
+    maxWidth: 280,
   },
   emptyCta: {
     marginTop: 18,
   },
   emptyCtaInner: {
-    height: 50,
-    borderRadius: 25,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: colors.accent,
-    paddingHorizontal: 26,
+    paddingHorizontal: 22,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
   },
   emptyCtaLabel: {
     color: "#FFFFFF",
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: "800",
   },
 });

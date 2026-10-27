@@ -192,7 +192,7 @@ export default function PersonalizedInterviewScreen() {
       });
       await interviewSessionService.ensureCreated(nextSession, user.id);
       startedSessionId.current = generated.session.id;
-      router.replace("/interview/session" as Href);
+      router.replace({ pathname: "/interview/session", params: { id: nextSession.id } } as Href);
     } catch (error) {
       setGenerationError(getResumeErrorMessage(error));
       setStarting(false);

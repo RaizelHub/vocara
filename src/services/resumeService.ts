@@ -1,3 +1,4 @@
+import { InterviewStartError } from "@/lib/interviewErrors";
 import { Platform } from "react-native";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
@@ -649,6 +650,7 @@ function toStrings(value: Json | null) {
 }
 
 export function getResumeErrorMessage(error: unknown) {
+  if (error instanceof InterviewStartError) return error.message;
   if (error instanceof ResumeFileValidationError) return error.message;
   if (error instanceof ResumeServiceError) {
     if (error.code === "unauthorized") {
