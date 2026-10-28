@@ -39,7 +39,9 @@ export type FeatureAccessResult = {
 // attempt id). Idempotent: retrying the same attempt never double-counts.
 // Throws FeatureAccessError on PRO_REQUIRED / FEATURE_LIMIT_REACHED.
 export async function enforceFeatureAccess(
-  adminClient: { rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: RpcError | null }> },
+  adminClient: { rpc: (fn: "check_feature_access", args: {
+    p_user_id: string; p_feature: string; p_event_key: string;
+  }) => PromiseLike<{ data: unknown; error: RpcError | null }> },
   userId: string,
   feature: string,
   eventKey: string,

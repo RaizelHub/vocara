@@ -1,3 +1,5 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
+import { usageContext, aiClaimError } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -90,6 +92,9 @@ export default {
           "Authentication is required.",
         );
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       let input: { resumeId: string; jobDescriptionId: string };
       try {
@@ -209,8 +214,9 @@ export default {
       const attemptId = crypto.randomUUID();
       const { data: claimed, error: claimError } = await context.supabaseAdmin
         .rpc(
-          "claim_resume_job_match",
+          "claim_tracked_resume_job_match",
           {
+            p_attempt_id: attemptId,
             p_resume_id: input.resumeId,
             p_job_description_id: input.jobDescriptionId,
             p_user_id: userId,
@@ -220,6 +226,8 @@ export default {
         );
 
       if (claimError) {
+        const capacity = aiClaimError(claimError);
+        if (capacity) return capacity;
         return handleClaimError(claimError);
       }
       if (claimed && typeof claimed === "object") {
@@ -250,6 +258,7 @@ export default {
         const { evaluation, validated } = await withGroqRetry(
           async (attempt) => {
             const evaluation = await requestStructuredEvaluation({
+              usage: usageContext(context.supabaseAdmin, userId, attemptId, "resume_match_requests"),
               config: { ...configuration, reasoningEffort: "low" },
               schemaName: "resume_job_match",
               schema: RESUME_MATCH_JSON_SCHEMA,
@@ -343,6 +352,10 @@ export default {
           );
         }
 
+        const { error: finishError } = await context.supabaseAdmin.rpc("finish_resume_match_request", {
+          p_attempt_id: attemptId, p_user_id: userId, p_status: "completed",
+        });
+        if (finishError) throw new FunctionError(503, "AI_ACCOUNTING_UNAVAILABLE", "The saved comparison could not be reconciled. Retry to load it.");
         return Response.json(
           toResponse(input.resumeId, input.jobDescriptionId, matchId, {
             ...validated,
@@ -351,6 +364,9 @@ export default {
         );
       } catch (error) {
         const handled = normalizeFunctionError(error);
+        await context.supabaseAdmin.rpc("finish_resume_match_request", {
+          p_attempt_id: attemptId, p_user_id: userId, p_status: "failed",
+        });
         const { error: failureError } = await context.supabaseAdmin.rpc(
           "fail_resume_job_match",
           {

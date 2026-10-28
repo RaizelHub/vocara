@@ -1,4 +1,10 @@
 import {
+  fetchGroqJson,
+  ProviderError as EvaluationFunctionError,
+  type UsageContext,
+} from "./aiProvider.ts";
+export { ProviderError as EvaluationFunctionError } from "./aiProvider.ts";
+import {
   ALLOWED_EVALUATION_MODELS,
   ALLOWED_REASONING_EFFORTS,
   DEFAULT_EVALUATION_MODEL,
@@ -6,39 +12,16 @@ import {
   DEFAULT_REASONING_EFFORT,
 } from "./evaluationConfig.ts";
 
-export const RETRYABLE_GROQ_CODES = new Set([
-  "GROQ_TIMEOUT",
-  "GROQ_UNAVAILABLE",
-  "GROQ_RATE_LIMIT",
-  "GROQ_ERROR",
-  "GROQ_INVALID_REQUEST",
-  "GROQ_INVALID_RESPONSE",
-]);
-
-export function isRetryableGroqError(error: unknown) {
-  return error instanceof EvaluationFunctionError &&
-    RETRYABLE_GROQ_CODES.has(error.code);
-}
-
-export async function withGroqRetry<T>(run: (attempt: number) => Promise<T>, options?: { maxAttempts: 1 | 3 }) {
-  const maxAttempts = options?.maxAttempts ?? 3;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await run(attempt);
-    } catch (error) {
-      lastError = error;
-      if (!isRetryableGroqError(error) || attempt === maxAttempts) throw error;
-      await new Promise((resolve) =>
-        setTimeout(resolve, 1_000 * Math.pow(2, attempt - 1))
-      );
-    }
-  }
-  throw lastError;
+// Retained call shape; retries must acquire a new durable claim. One claim = one
+// provider attempt, including invalid responses and uncertain network outcomes.
+export async function withGroqRetry<T>(
+  run: (attempt: number) => Promise<T>,
+  _options?: { maxAttempts: 1 },
+) {
+  return await run(1);
 }
 
 const GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions";
-const EVALUATION_TIMEOUT_MS = 75_000;
 
 export type EvaluationConfig = {
   apiKey: string;
@@ -55,20 +38,6 @@ export type StructuredEvaluationResult = {
   outputTokens: number | null;
   systemFingerprint: string | null;
 };
-
-export class EvaluationFunctionError extends Error {
-  status: number;
-  code: string;
-  retryable: boolean;
-
-  constructor(status: number, code: string, message: string, retryable = true) {
-    super(message);
-    this.name = "EvaluationFunctionError";
-    this.status = status;
-    this.code = code;
-    this.retryable = retryable;
-  }
-}
 
 export function getEvaluationConfig(): EvaluationConfig {
   const apiKey = Deno.env.get("GROQ_API_KEY")?.trim();
@@ -102,6 +71,7 @@ export function getEvaluationConfig(): EvaluationConfig {
 
 export async function requestStructuredEvaluation(input: {
   config: EvaluationConfig;
+  usage: UsageContext;
   schemaName: string;
   schema: unknown;
   instructions: string;
@@ -110,91 +80,42 @@ export async function requestStructuredEvaluation(input: {
   maxCompletionTokens: number;
   seed?: number;
 }): Promise<StructuredEvaluationResult> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), EVALUATION_TIMEOUT_MS);
-  let response: Response;
-  let payload: GroqResponse | null;
-  try {
-    response = await fetch(GROQ_CHAT_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${input.config.apiKey}`,
-        "Content-Type": "application/json",
+  const body = JSON.stringify({
+    model: input.config.model,
+    messages: [
+      { role: "system", content: input.instructions },
+      { role: "user", content: input.content },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: input.schemaName,
+        strict: true,
+        schema: input.schema,
       },
-      body: JSON.stringify({
-        model: input.config.model,
-        messages: [
-          { role: "system", content: input.instructions },
-          { role: "user", content: input.content },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: input.schemaName,
-            strict: true,
-            schema: input.schema,
-          },
-        },
-        reasoning_effort: resolveReasoningEffort(input.config.model, input.config.reasoningEffort),
-        include_reasoning: false,
-        temperature: 0.5,
-        seed: input.seed ?? 42,
-        max_completion_tokens: input.maxCompletionTokens,
-        stream: false,
-        user: await createSafetyIdentifier(input.userId),
-      }),
-      signal: controller.signal,
-    });
-    payload = (await response.json().catch((error) => {
-      if (controller.signal.aborted) throw error;
-      return null;
-    })) as GroqResponse | null;
-  } catch (error) {
-    if (
-      controller.signal.aborted ||
-      (error instanceof DOMException && error.name === "AbortError")
-    ) {
-      throw new EvaluationFunctionError(
-        504,
-        "GROQ_TIMEOUT",
-        "The AI request took too long. Please retry.",
-      );
-    }
-    throw new EvaluationFunctionError(
-      503,
-      "GROQ_UNAVAILABLE",
-      "AI is temporarily unavailable. Please retry.",
-    );
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  if (!response.ok) {
-    const detailMessage = providerErrorMessage(payload);
-
-    if (response.status === 429) {
-      throw new EvaluationFunctionError(
-        429,
-        "GROQ_RATE_LIMIT",
-        "AI feedback is busy right now. Please retry shortly.",
-      );
-    }
-    if (response.status === 401 || response.status === 403) {
-      throw new EvaluationFunctionError(
-        500,
-        "EVALUATION_NOT_CONFIGURED",
-        `AI feedback API key error: ${detailMessage || "Unauthorized API Key"}`,
-        false,
-      );
-    }
-    const invalidRequest = response.status === 400 || response.status === 422;
-    throw new EvaluationFunctionError(
-      invalidRequest ? 502 : response.status >= 500 ? 503 : 502,
-      invalidRequest ? "GROQ_INVALID_REQUEST" : "GROQ_ERROR",
-      `AI feedback error (${response.status}): ${detailMessage || "AI feedback could not be generated. Please retry."}`,
-      true,
-    );
-  }
+    },
+    reasoning_effort: resolveReasoningEffort(
+      input.config.model,
+      input.config.reasoningEffort,
+    ),
+    include_reasoning: false,
+    temperature: 0.5,
+    seed: input.seed ?? 42,
+    max_completion_tokens: input.maxCompletionTokens,
+    stream: false,
+    user: await createSafetyIdentifier(input.userId),
+  });
+  // UTF-8 bytes conservatively bound token count, including schema overhead.
+  const inputUpperBound = new TextEncoder().encode(body).length;
+  const { payload, response } = await fetchGroqJson({
+    url: GROQ_CHAT_URL,
+    apiKey: input.config.apiKey,
+    model: input.config.model,
+    body,
+    usage: input.usage,
+    inputUpperBound,
+    outputLimit: input.maxCompletionTokens,
+  });
 
   const content = payload?.choices?.[0]?.message?.content;
   if (typeof content !== "string" || !content.trim()) {
@@ -251,24 +172,3 @@ function integerOrNull(value: unknown) {
     ? (value as number)
     : null;
 }
-
-function providerErrorMessage(payload: GroqResponse | null) {
-  if (!payload || typeof payload !== "object") return "";
-  const error = payload.error;
-  if (error && typeof error === "object") {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === "string") return message;
-  }
-  return typeof payload.message === "string" ? payload.message : "";
-}
-
-type GroqResponse = {
-  id?: unknown;
-  model?: unknown;
-  system_fingerprint?: unknown;
-  x_groq?: { id?: unknown };
-  choices?: { message?: { content?: unknown } }[];
-  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
-  error?: { message?: unknown; type?: unknown; code?: unknown };
-  message?: unknown;
-};

@@ -1,3 +1,5 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
+import { fetchGroqJson, ProviderError, usageContext, aiClaimError, type UsageContext } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -62,6 +64,9 @@ export default {
       if (!userId) {
         return errorResponse(401, "unauthorized", "Authentication is required.");
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       let attemptId: string;
       try {
@@ -132,6 +137,8 @@ export default {
       );
 
       if (claimError) {
+        const capacity = aiClaimError(claimError);
+        if (capacity) return capacity;
         if (claimError.message.includes("SPEAKING_TRANSCRIPTION_ALREADY_COMPLETED")) {
           const { data: current } = await context.supabaseAdmin
             .from("speaking_attempts")
@@ -216,6 +223,8 @@ export default {
           attempt.audio_path!,
           requestId,
           providerConfig,
+        usageContext(context.supabaseAdmin, userId, requestId, "speaking_transcription_requests"),
+        media.durationSeconds,
           {
             category: sessionResult.data.category,
             prompt: sessionResult.data.prompt_text,
@@ -282,7 +291,10 @@ export default {
       } catch (error) {
         const handled = normalizeFunctionError(error);
         const uncertainProviderOutcome = [
-          "transcription_timeout",
+          "GROQ_TIMEOUT",
+        "GROQ_UNAVAILABLE",
+        "AI_ACCOUNTING_UNAVAILABLE",
+        "transcription_timeout",
           "transcription_unavailable",
         ].includes(handled.code);
         let finalRetryable = handled.retryable;
@@ -450,6 +462,8 @@ async function requestTranscription(
   audioPath: string,
   requestId: string,
   configuration: ProviderConfig,
+  usage: UsageContext,
+  audioSeconds: number,
   context: { category: string; prompt: string },
 ) {
   const { apiKey, model } = configuration;
@@ -460,74 +474,10 @@ async function requestTranscription(
   form.append("model", model);
   form.append("prompt", buildTranscriptionPrompt(context));
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "X-Client-Request-Id": requestId,
-      },
-      body: form,
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new FunctionError(
-        504,
-        "transcription_timeout",
-        "Transcription took too long. Please retry.",
-      );
-    }
-    throw new FunctionError(
-      503,
-      "transcription_unavailable",
-      "The transcription service is temporarily unavailable.",
-    );
-  } finally {
-    clearTimeout(timeout);
-  }
-
-  const payload = (await response.json().catch(() => null)) as
-    | { text?: unknown; error?: { code?: string } }
-    | null;
-  if (!response.ok) {
-    const code = payload?.error?.code;
-    if (response.status === 413) {
-      throw new FunctionError(
-        413,
-        "audio_too_large",
-        "The recording is too large.",
-        false,
-      );
-    }
-    if (response.status === 429) {
-      throw new FunctionError(
-        503,
-        "transcription_busy",
-        "Transcription is busy right now. Please retry shortly.",
-      );
-    }
-    const configurationError =
-      response.status === 401 ||
-      response.status === 403 ||
-      code === "invalid_api_key";
-    const rejectedAudio = response.status === 400 || response.status === 415;
-    throw new FunctionError(
-      configurationError ? 500 : rejectedAudio ? 422 : 502,
-      configurationError
-        ? "transcription_not_configured"
-        : rejectedAudio
-          ? "openai_rejected_audio"
-          : "openai_error",
-      rejectedAudio
-        ? "The transcription service could not read this recording. Please record it again."
-        : "The transcription service could not process this recording.",
-      !rejectedAudio,
-    );
-  }
+  const { payload, response } = await fetchGroqJson({
+    url: "https://api.groq.com/openai/v1/audio/transcriptions",
+    apiKey, model, body: form, usage, audioSeconds, timeoutMs: PROVIDER_TIMEOUT_MS,
+  });
   if (!payload || typeof payload.text !== "string") {
     throw new FunctionError(
       502,
@@ -604,6 +554,7 @@ function toResponse(attempt: AttemptRow): TranscriptionResponse {
 }
 
 function normalizeFunctionError(error: unknown) {
+  if (error instanceof ProviderError) return error;
   if (error instanceof FunctionError) return error;
   if (error instanceof AudioInspectionError) {
     return new FunctionError(

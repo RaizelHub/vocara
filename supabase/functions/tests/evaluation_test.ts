@@ -16,7 +16,6 @@ import {
 } from "../_shared/evaluationSchemas.ts";
 import {
   EvaluationFunctionError,
-  isRetryableGroqError,
   withGroqRetry,
 } from "../_shared/groq.ts";
 import { EVALUATION_FIXTURES } from "./evaluationFixtures.ts";
@@ -155,21 +154,12 @@ Deno.test("includes all required quality fixtures", () => {
   );
 });
 
-Deno.test("retries transient Groq structured-output failures", async () => {
-  const failure = new EvaluationFunctionError(
-    502,
-    "GROQ_INVALID_REQUEST",
-    "Structured output generation failed.",
-  );
-  assert.equal(isRetryableGroqError(failure), true);
-
+Deno.test("invalid structured output does not cause an unaccounted provider retry", async () => {
+  const failure = new EvaluationFunctionError(502, "GROQ_INVALID_RESPONSE", "Invalid structured output");
   const attempts: number[] = [];
-  const result = await withGroqRetry(async (attempt) => {
+  await assert.rejects(() => withGroqRetry(async attempt => {
     attempts.push(attempt);
-    if (attempt < 3) throw failure;
-    return "completed";
-  });
-
-  assert.equal(result, "completed");
-  assert.deepEqual(attempts, [1, 2, 3]);
+    throw failure;
+  }), /Invalid structured output/);
+  assert.deepEqual(attempts, [1]);
 });

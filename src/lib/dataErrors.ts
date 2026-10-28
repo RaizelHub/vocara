@@ -2,7 +2,8 @@ import { InterviewStartError } from "./interviewErrors";
 
 export function getDataErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof InterviewStartError) return error.message;
-  if (__DEV__) console.error("[VOCARA data]", error);
+  // Backend error details can contain a rejected row or private request content.
+  if (__DEV__) console.warn("[VOCARA data] Data request failed.");
 
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   if (

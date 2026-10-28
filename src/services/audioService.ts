@@ -284,11 +284,11 @@ function storageUploadError(status: number, responseText: string) {
   if (__DEV__) {
     console.warn("Audio upload rejected by Supabase Storage", {
       status,
-      response: details || "<empty response>",
+      code,
     });
   }
 
-  return new AudioUploadError(code, "Storage rejected the upload.", status, details);
+  return new AudioUploadError(code, "Storage rejected the upload.", status);
 }
 
 async function sha256(blob: Blob) {

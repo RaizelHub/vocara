@@ -1,3 +1,5 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
+import { usageContext, aiClaimError } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 import { getDocumentProxy, extractText } from "npm:unpdf@1.8.0";
@@ -99,6 +101,9 @@ export default {
           "Authentication is required.",
         );
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       let resumeId: string;
       try {
@@ -167,6 +172,8 @@ export default {
         );
 
       if (claimError) {
+        const capacity = aiClaimError(claimError);
+        if (capacity) return capacity;
         return handleClaimError(claimError);
       }
       if (claimed && typeof claimed === "object") {
@@ -213,6 +220,7 @@ export default {
         const { evaluation, validated } = await withGroqRetry(
           async (attempt) => {
             const evaluation = await requestStructuredEvaluation({
+              usage: usageContext(context.supabaseAdmin, userId, attemptId, "resume_generation_requests"),
               config: { ...configuration, reasoningEffort: "low" },
               schemaName: "resume_analysis",
               schema: RESUME_ANALYSIS_JSON_SCHEMA,

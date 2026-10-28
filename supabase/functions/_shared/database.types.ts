@@ -439,6 +439,14 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      claim_tracked_resume_job_match: {
+        Args: { p_resume_id: string; p_job_description_id: string; p_user_id: string; p_analysis_version: string; p_model: string; p_attempt_id: string };
+        Returns: Json;
+      };
+      finish_resume_match_request: {
+        Args: { p_attempt_id: string; p_user_id: string; p_status: string };
+        Returns: undefined;
+      };
       claim_job_analysis: {
         Args: {
           p_job_description_id: string;

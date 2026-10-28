@@ -1,3 +1,5 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
+import { usageContext, aiClaimError } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -92,6 +94,9 @@ export default {
           "Authentication is required.",
         );
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       let answerId: string;
       try {
@@ -181,6 +186,8 @@ export default {
         );
 
       if (claimError) {
+        const capacity = aiClaimError(claimError);
+        if (capacity) return capacity;
         return handleClaimError(claimError);
       }
       if (!claimed) {
@@ -332,6 +339,7 @@ export default {
         const { evaluation, validated } = await withGroqRetry(
           async (providerAttempt) => {
             const evaluation = await requestStructuredEvaluation({
+              usage: usageContext(context.supabaseAdmin, userId, attemptId, "ai_evaluation_requests"),
               config: configuration,
               schemaName: "answer_evaluation",
               schema: ANSWER_EVALUATION_JSON_SCHEMA,

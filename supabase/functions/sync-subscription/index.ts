@@ -1,3 +1,4 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -28,6 +29,9 @@ export default {
           { status: 401 },
         );
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       const secretApiKey = Deno.env.get("REVENUECAT_SECRET_API_KEY");
       if (!secretApiKey) {

@@ -1,3 +1,5 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
+import { usageContext, aiClaimError } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -122,6 +124,9 @@ export default {
           "Authentication is required.",
         );
       }
+      const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+      if (accountDenied) return accountDenied;
+
 
       let input: {
         requestId: string;
@@ -279,6 +284,8 @@ export default {
         );
 
       if (claimError) {
+        const capacity = aiClaimError(claimError);
+        if (capacity) return capacity;
         return handleGenerationClaimError(claimError);
       }
       if (existing) {
@@ -306,6 +313,7 @@ export default {
         const { evaluation, validated } = await withGroqRetry(
           async (attempt) => {
             const evaluation = await requestStructuredEvaluation({
+              usage: usageContext(context.supabaseAdmin, userId, attemptId, "job_generation_requests"),
               config: { ...configuration, reasoningEffort: "low" },
               schemaName: "personalized_interview",
               schema: jobInterviewJsonSchema(input.questionCount),

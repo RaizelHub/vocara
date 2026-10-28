@@ -35,6 +35,7 @@ import {
   useAnswerRecorder,
 } from "@/hooks/useAnswerRecorder";
 import { getDataErrorMessage, isAuthenticationError } from "@/lib/dataErrors";
+import { createVerifiedAudioUpload } from "@/lib/verifiedAudioUpload";
 import { useAuth } from "@/providers/AuthProvider";
 import {
   audioUploadRequiresAuthentication,
@@ -76,6 +77,8 @@ import {
   type SessionState,
   type InterviewSession,
 } from "@/types/interview";
+
+const SERVICE_CONFIGURATION_ERRORS = new Set(["EVALUATION_NOT_CONFIGURED", "GROQ_MODEL_UNAVAILABLE", "GROQ_BUDGET_LIMIT"]);
 
 type FailureStage =
   | "permission"
@@ -231,6 +234,8 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
   const operationInFlight = useRef(false);
   const screenGeneration = useRef(0);
   const uploadAbortController = useRef<AbortController | null>(null);
+  const uploadVerifiedAudio = useRef(createVerifiedAudioUpload(audioService.uploadAnswerAudio));
+  const attachmentAttempts = useRef(new Set<string>());
   const {
     recording,
     error: recorderError,
@@ -369,7 +374,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
           : null;
       if (state.phase === "recording" || isRecording) await stopRecording();
       await startRecording();
-      if (abandonedAudioPath) {
+      if (abandonedAudioPath && !attachmentAttempts.current.has(abandonedAudioPath)) {
         void audioService.deleteAnswerAudio(abandonedAudioPath).catch(() => undefined);
       }
       dispatch({
@@ -430,7 +435,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
       });
 
       const previousRemotePath = answer.audio_path;
-      const uploaded = await audioService.uploadAnswerAudio({
+      const uploaded = await uploadVerifiedAudio.current({
         localUri: recording.uri,
         audioPath,
         signal: uploadController.signal,
@@ -439,9 +444,14 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         uploadController.signal.aborted ||
         screenGeneration.current !== expectedScreenGeneration
       ) {
-        await audioService.deleteAnswerAudio(uploaded.path).catch(() => undefined);
+        // An earlier attach response may have been lost after the server saved it.
+        // Only remove an upload that this room has never attempted to attach.
+        if (!attachmentAttempts.current.has(uploaded.path)) {
+          await audioService.deleteAnswerAudio(uploaded.path).catch(() => undefined);
+        }
         return;
       }
+      attachmentAttempts.current.add(uploaded.path);
       answer = await interviewAnswerService.attachAudio({
         answerId: answer.id,
         audioPath: uploaded.path,
@@ -853,7 +863,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
             onPrimary={
               state.failure.requiresAuth
                 ? handleReauthenticate
-                : state.failure.code === "answer_retry_exhausted"
+                : (state.failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? ""))
                   ? handleLeave
                 : state.failure.stage === "upload"
                 ? state.failure.retryable === false
@@ -879,7 +889,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
                         : () => void handleRecordAgain()
             }
             onRecordAgain={
-              state.failure.code === "answer_retry_exhausted" ||
+              (state.failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? "")) ||
               state.failure.stage === "completion" ||
               state.failure.stage === "finalization" ||
               state.failure.code === "daily_limit_reached" ||
@@ -948,7 +958,7 @@ function AnswerErrorState({
             : "Recorder unavailable";
   const primaryLabel = failure.requiresAuth
     ? "Return to sign in"
-    : failure.code === "answer_retry_exhausted"
+    : (failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(failure.code ?? ""))
       ? "Back to home"
     : upload
     ? failure.retryable === false
