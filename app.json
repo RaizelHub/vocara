@@ -63,7 +63,8 @@
           "project": "vocara-mobile",
           "note": "Authenticates via SENTRY_AUTH_TOKEN env var during EAS builds. Replace organization/project with your Sentry project slug."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

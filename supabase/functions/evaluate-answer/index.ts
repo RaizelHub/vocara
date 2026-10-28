@@ -442,10 +442,7 @@ export default {
             },
           );
           if (failureUpdateError) {
-            console.error("[evaluate-answer] Failed to persist failure state", {
-              answerId,
-              code: failureUpdateError.code,
-            });
+            console.error("[evaluate-answer] Failed to persist failure state");
           }
         }
         return errorResponse(

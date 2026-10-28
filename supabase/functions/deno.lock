@@ -2,6 +2,7 @@
   "version": "5",
   "specifiers": {
     "npm:@supabase/server@1.4.1": "1.4.1_@supabase+supabase-js@2.112.2",
+    "npm:@supabase/supabase-js@2.112.2": "2.112.2",
     "npm:unpdf@1.8.0": "1.8.0"
   },
   "npm": {

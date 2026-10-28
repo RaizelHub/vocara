@@ -3,7 +3,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, extensions;
-select plan(18);
+select plan(20);
 
 create function pg_temp.questions(n integer) returns jsonb language sql as $$
   select jsonb_agg(jsonb_build_object('id',gen_random_uuid(),'text','Synthetic question ' || x))
@@ -88,9 +88,13 @@ select is((select status from public.interview_sessions where id=(select sid fro
 select is((select count(*)::integer from public.ai_evaluation_requests where user_id=(select uid from fixture)),7,'five evaluations, one explicit failed-attempt retry and one summary; no duplicate claims');
 select is((select usage_count from public.feature_usage where user_id=(select uid from fixture) and feature='ai_feedback'),5,'completion consumes no additional allowance');
 
-select set_config('request.jwt.claim.sub',gen_random_uuid()::text,true);
+insert into auth.users(id,email) values ('ffffffff-ffff-4fff-8fff-ffffffffffff','other@example.invalid');
+select set_config('request.jwt.claim.sub','ffffffff-ffff-4fff-8fff-ffffffffffff',true);
 select is(public.get_interview_recovery((select sid from fixture)),null::jsonb,'another user cannot recover private content');
 select set_config('request.jwt.claim.sub','',true);
 select throws_ok($$select public.get_interview_recovery(null)$$,'42501','NOT_AUTHENTICATED','authentication remains required');
+select public.request_account_deletion((select uid from fixture));
+select lives_ok($$delete from auth.users where id=(select uid from fixture)$$,'completed interview with AI ledgers can be erased through Auth cascade');
+select is((select count(*)::int from public.ai_usage_attempts where user_id=(select uid from fixture)),0,'account deletion removes AI usage records');
 select * from finish();
 rollback;

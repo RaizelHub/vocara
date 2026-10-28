@@ -21,6 +21,7 @@ import { resetInterviewSession } from "@/state/session";
 import type { FocusArea, Profile, UserPreference } from "@/types/database";
 
 type AuthContextValue = {
+  deletionPending: boolean;
   session: Session | null;
   user: User | null;
   profile: Profile | null;
@@ -41,6 +42,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const [deletionPending, setDeletionPending] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -66,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const applySnapshot = useCallback((snapshot: UserProfileSnapshot) => {
+    setDeletionPending(snapshot.deletionPending);
     setProfile(snapshot.profile);
     setFocusAreas(snapshot.focusAreas);
     setPreferences(snapshot.preferences);
@@ -83,6 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(nextSession?.user ?? null);
 
       if (!nextSession) {
+        setDeletionPending(false);
         setProfile(null);
         setFocusAreas([]);
         setPreferences(null);
@@ -91,11 +95,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        const verified = await supabase.auth.getUser(nextSession.access_token);
+        if (verified.error || !verified.data.user) {
+          const invalid = verified.error?.status === 401 || verified.error?.status === 403 || verified.error?.code === "user_not_found";
+          if (!invalid) throw verified.error ?? new Error("Account verification unavailable");
+          await supabase.auth.signOut({ scope: "local" }).catch(() => {});
+          if (!mounted.current || operation.current !== operationId) return;
+          sessionRef.current = null; setSession(null); setUser(null); setProfile(null);
+          setDeletionPending(false); setFocusAreas([]); setPreferences(null); resetInterviewSession();
+          return;
+        }
         const snapshot = await profileService.getSnapshot(nextSession.user.id);
         if (!mounted.current || operation.current !== operationId) return;
         applySnapshot(snapshot);
       } catch (error) {
-        if (__DEV__) console.error("[VOCARA profile bootstrap]", error);
+        if (__DEV__) console.error("[VOCARA profile bootstrap]");
         if (!mounted.current || operation.current !== operationId) return;
         setBootstrapError(getProfileLoadMessage(error));
       } finally {
@@ -124,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await applySession(data.session);
     } catch (error) {
       if (authEventGeneration.current !== eventGeneration) return;
-      if (__DEV__) console.error("[VOCARA auth bootstrap]", error);
+      if (__DEV__) console.error("[VOCARA auth bootstrap]");
       if (mounted.current) {
         setBootstrapError(getProfileLoadMessage(error));
         setLoading(false);
@@ -278,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         session,
+        deletionPending,
         user,
         profile,
         focusAreas,

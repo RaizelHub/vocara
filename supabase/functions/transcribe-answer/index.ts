@@ -1,3 +1,4 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
 import { fetchGroqJson, ProviderError, usageContext, aiClaimError, type UsageContext } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
@@ -56,6 +57,9 @@ export default {
     if (!userId) {
       return errorResponse(401, "unauthorized", "Authentication is required.");
     }
+
+    const accountDenied = await accountAccessResponse(context.supabaseAdmin, userId);
+    if (accountDenied) return accountDenied;
 
     let answerId: string;
     try {
@@ -347,10 +351,7 @@ export default {
         });
 
         if (failureUpdateError) {
-          console.error("[transcribe-answer] Failed to persist failure state", {
-            answerId,
-            code: failureUpdateError.code,
-          });
+          console.error("[transcribe-answer] Failed to persist failure state");
         } else if (failedAnswer) {
           finalRetryable = failedAnswer.transcription_retryable;
         }

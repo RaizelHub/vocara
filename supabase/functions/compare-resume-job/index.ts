@@ -378,11 +378,7 @@ export default {
           },
         );
         if (failureError) {
-          console.error("[compare-resume-job] Failed to persist failure state", {
-            resumeId: input.resumeId,
-            jobDescriptionId: input.jobDescriptionId,
-            code: failureError.code,
-          });
+          console.error("[compare-resume-job] Failed to persist failure state");
         }
         return errorResponse(
           handled.status,

@@ -278,10 +278,7 @@ export default {
           },
         );
         if (failureUpdateError) {
-          console.error("[analyze-job] Failed to persist failure state", {
-            jobDescriptionId,
-            code: failureUpdateError.code,
-          });
+          console.error("[analyze-job] Failed to persist failure state");
         }
         return errorResponse(
           handled.status,

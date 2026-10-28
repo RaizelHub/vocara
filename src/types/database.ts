@@ -542,6 +542,8 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      request_account_data_copy: { Args: Record<string, never>; Returns: string };
+      get_account_deletion_status: { Args: Record<string, never>; Returns: Json };
       create_reserved_interview: {
         Args: { p_session_id: string; p_role: string; p_type: string; p_difficulty: string; p_style: string; p_questions: Json };
         Returns: InterviewSessionRecord;

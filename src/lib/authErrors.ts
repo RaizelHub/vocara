@@ -21,11 +21,7 @@ export function getAuthErrorMessage(error: unknown, operation: AuthOperation): s
   if (__DEV__ && !isExpectedAuthFailure(code, message)) {
     // Logging the Error object with console.error opens React Native's error
     // overlay for handled Auth failures. Keep useful metadata without a stack.
-    console.info(`[VOCARA auth:${operation}]`, {
-      code: details.code ?? "unknown",
-      status: details.status ?? "unknown",
-      message: details.message ?? "Unknown authentication error",
-    });
+    console.info("[VOCARA auth] Authentication request failed.");
   }
 
   if (

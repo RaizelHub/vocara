@@ -25,7 +25,15 @@ Rules for the structured result:
 
 Keep all strings concise and professional.`;
 
+export function minimizeResumeContacts(text: string) {
+  return text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email omitted]")
+    .replace(/\+\d[\d ()-]{8,}\d/g, (value) => {
+      const digits = value.replace(/\D/g, "");
+      return digits.length >= 10 && digits.length <= 15 ? "[phone omitted]" : value;
+    });
+}
 export function buildResumeAnalysisInput(extractedText: string) {
+  extractedText = minimizeResumeContacts(extractedText);
   const truncated = extractedText.length > 18_000
     ? extractedText.slice(0, 18_000)
     : extractedText;

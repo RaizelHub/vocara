@@ -333,10 +333,7 @@ export default {
             },
           );
           if (failureUpdateError) {
-            console.error("[evaluate-speaking] Failed to persist failure state", {
-              attemptId,
-              code: failureUpdateError.code,
-            });
+            console.error("[evaluate-speaking] Failed to persist failure state");
           }
         }
         return errorResponse(

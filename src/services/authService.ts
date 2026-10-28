@@ -61,6 +61,7 @@ export const authService = {
   async signOut() {
     assertSupabaseConfigured();
     const { error } = await supabase.auth.signOut({ scope: "local" });
+    callbackRequests.clear();
     if (error) throw error;
   },
 

@@ -13,6 +13,7 @@ try {
   await db.exec(`
     create role anon; create role authenticated; create role service_role bypassrls;
     create schema auth; create schema storage; create schema extensions;
+    alter default privileges in schema public grant all on tables to anon,authenticated,service_role;
     create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
     create function auth.uid() returns uuid language sql stable as $$
       select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid
@@ -44,7 +45,7 @@ try {
     console.log(`Applied in memory: ${name}`);
   }
   let count = 0;
-  for (const name of ["interview_reliability.test.sql", "ai_usage.test.sql"]) {
+  for (const name of ["interview_reliability.test.sql", "ai_usage.test.sql", "privacy.test.sql", "retention.test.sql"]) {
     const results = await db.exec(
       await Deno.readTextFile(`supabase/tests/database/${name}`),
     );
@@ -65,6 +66,10 @@ try {
   console.log(
     `PASS: ${migrations.length} migrations and ${count} pgTAP assertions in isolated single-connection PostgreSQL. Supabase/real concurrency validation remains required.`,
   );
+} catch (error) {
+  const detail = error as {message?:string;where?:string};
+  console.error(detail.message, detail.where);
+  throw error;
 } finally {
   await db.close();
 }

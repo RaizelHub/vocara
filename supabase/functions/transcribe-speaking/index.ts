@@ -312,10 +312,7 @@ export default {
           });
 
           if (failureUpdateError) {
-            console.error("[transcribe-speaking] Failed to persist failure state", {
-              attemptId,
-              code: failureUpdateError.code,
-            });
+            console.error("[transcribe-speaking] Failed to persist failure state");
           } else if (failedAttempt) {
             finalRetryable = failedAttempt.transcription_retryable;
           }

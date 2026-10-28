@@ -404,13 +404,7 @@ export default {
           },
         );
         if (failureError) {
-          console.error(
-            "[generate-personalized-interview] Failed to persist failure state",
-            {
-              jobDescriptionId: input.jobDescriptionId,
-              code: failureError.code,
-            },
-          );
+          console.error("[generate-personalized-interview] Failed to persist failure state");
         }
         return errorResponse(
           handled.status,

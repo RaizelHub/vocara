@@ -230,7 +230,7 @@ export const audioService = {
     assertSupabaseConfigured();
     const { data, error } = await supabase.storage
       .from(SPEAKING_AUDIO_BUCKET)
-      .createSignedUrl(path, expiresInSeconds);
+      .createSignedUrl(path, Math.max(1, Math.min(expiresInSeconds, 300)));
     if (error) throw error;
     return data.signedUrl;
   },
@@ -245,7 +245,7 @@ export const audioService = {
     assertSupabaseConfigured();
     const { data, error } = await supabase.storage
       .from(INTERVIEW_AUDIO_BUCKET)
-      .createSignedUrl(path, expiresInSeconds);
+      .createSignedUrl(path, Math.max(1, Math.min(expiresInSeconds, 300)));
     if (error) throw error;
     return data.signedUrl;
   },
@@ -282,10 +282,7 @@ function storageUploadError(status: number, responseText: string) {
           : "upload_failed";
 
   if (__DEV__) {
-    console.warn("Audio upload rejected by Supabase Storage", {
-      status,
-      code,
-    });
+    console.warn("Audio upload rejected by Supabase Storage");
   }
 
   return new AudioUploadError(code, "Storage rejected the upload.", status);

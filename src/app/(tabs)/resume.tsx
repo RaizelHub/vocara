@@ -14,6 +14,7 @@ import { colors } from "@/theme/colors";
 import {
   getResumeErrorMessage,
   resumeService,
+  discardPickedResumeCopy,
 } from "@/services/resumeService";
 import { jobService } from "@/services/jobService";
 import { RESUME_SENIORITY_LABELS, type ResumeAnalysis } from "@/types/resume";
@@ -96,6 +97,7 @@ export default function ResumeTabScreen() {
   async function pickAndUpload() {
     if (picking || processing) return;
     setPicking(true);
+    let pickedCopy: string | null = null;
     setError(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -105,6 +107,7 @@ export default function ResumeTabScreen() {
       });
       if (result.canceled || !result.assets?.length) return;
       const asset = result.assets[0];
+      pickedCopy = asset.uri;
       if (!asset.uri || !asset.name) {
         setError("We couldn't read that file. Choose a PDF resume and try again.");
         return;
@@ -135,6 +138,7 @@ export default function ResumeTabScreen() {
     } catch (uploadError) {
       setError(getResumeErrorMessage(uploadError));
     } finally {
+      discardPickedResumeCopy(pickedCopy);
       setProcessing(false);
       setPicking(false);
     }

@@ -57,9 +57,7 @@ export default {
         );
 
         if (!response.ok) {
-          console.error("[sync-subscription] RevenueCat API error", {
-            status: response.status,
-          });
+          console.error("[sync-subscription] RevenueCat API error");
           if (response.status === 404) {
             // No subscriber in RevenueCat: the user never purchased anything.
             const { error: syncError } = await context.supabaseAdmin.rpc(
@@ -140,7 +138,7 @@ export default {
             : null,
         });
       } catch (error) {
-        console.error("[sync-subscription] Sync failed", error);
+        console.error("[sync-subscription] Sync failed");
         return Response.json(
           { code: "sync_failed", message: "We couldn't sync your subscription." },
           { status: 502 },

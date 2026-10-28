@@ -327,10 +327,7 @@ export default {
             },
           );
           if (failureUpdateError) {
-            console.error("[finalize-interview] Failed to persist failure state", {
-              sessionId,
-              code: failureUpdateError.code,
-            });
+            console.error("[finalize-interview] Failed to persist failure state");
           }
         }
         return errorResponse(

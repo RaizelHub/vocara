@@ -1,4 +1,5 @@
-import { Stack } from "expo-router";
+import { useEffect } from "react";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -27,7 +28,9 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, profile, loading, bootstrapError, retryBootstrap } = useAuth();
+  const { session, profile, deletionPending, loading, bootstrapError, retryBootstrap } = useAuth();
+  const router = useRouter();
+  useEffect(() => { if (deletionPending && !loading) router.replace("/account/delete"); }, [deletionPending, loading, router]);
 
   if (loading || bootstrapError) {
     return <AuthBootstrap error={bootstrapError} onRetry={retryBootstrap} />;
@@ -54,14 +57,17 @@ function RootNavigator() {
         <Stack.Screen name="verify-email" />
       </Stack.Protected>
 
+      <Stack.Screen name="account/delete" />
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="terms" />
       <Stack.Screen name="auth/callback" options={{ gestureEnabled: false }} />
       <Stack.Screen name="reset-password" options={{ gestureEnabled: false }} />
 
-      <Stack.Protected guard={signedIn && !setupComplete}>
+      <Stack.Protected guard={signedIn && !deletionPending && !setupComplete}>
         <Stack.Screen name="career-setup" />
       </Stack.Protected>
 
-      <Stack.Protected guard={signedIn && setupComplete}>
+      <Stack.Protected guard={signedIn && !deletionPending && setupComplete}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="interview/setup" />
         <Stack.Screen name="interview/session" options={{ gestureEnabled: false }} />

@@ -1,7 +1,7 @@
 import { InterviewStartError } from "@/lib/interviewErrors";
 import { Platform } from "react-native";
 import { randomUUID } from "expo-crypto";
-import { File } from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 
 import { assertSupabaseConfigured, supabase } from "@/lib/supabase";
 import { invokeEdgeFunction } from "@/services/jobService";
@@ -112,7 +112,6 @@ export const resumeService = {
         storage_path: storagePath,
         mime_type: "application/pdf",
         file_size_bytes: finalSizeBytes,
-        processing_status: "uploaded",
       })
       .select(
         "id,user_id,is_active,deleted_at,file_name,storage_path,mime_type,file_size_bytes,extracted_text,processing_status,processing_error,analysis_model,analysis_version,created_at,updated_at",
@@ -120,7 +119,7 @@ export const resumeService = {
       .single();
 
     if (error) {
-      await supabase.storage.from(RESUME_STORAGE_BUCKET).remove([storagePath]).catch(() => {});
+      // A lost database response may have committed; orphan cleanup checks references.
       const isAuthErr = /jwt|token|auth|unauthorized|row-level security|row level security/i.test(error.message);
       if (isAuthErr) {
         throw new ResumeServiceError(
@@ -130,7 +129,7 @@ export const resumeService = {
         );
       }
       throw new ResumeServiceError(
-        `We couldn't save your resume record: ${error.message}`,
+        "We couldn't save your resume. Please retry.",
         "resume_save_failed",
       );
     }
@@ -401,7 +400,7 @@ async function uploadResumePdf(input: UploadResumeInput, storagePath: string): P
       throw new ResumeServiceError("Your session expired. Sign in again before continuing.", "unauthorized", false);
     }
     throw new ResumeServiceError(
-      `We couldn't upload your resume: ${errorMsg}`,
+      "We couldn't upload your resume. Please retry or remove an old resume if your file allowance is full.",
       "upload_failed",
     );
   }
@@ -695,4 +694,12 @@ export function canRetryResumeAction(error: unknown) {
 
 export function resumeActionRequiresAuthentication(error: unknown) {
   return error instanceof ResumeServiceError && error.code === "unauthorized";
+}
+
+/** Delete only the document picker's temporary copy, never the user's original. */
+export function discardPickedResumeCopy(uri:string|null){
+ if(!uri || Platform.OS==="web")return;
+ try{const cache=new URL(Paths.cache.uri).href;const normalized=new URL(uri).href;
+  if(normalized.startsWith(cache.endsWith("/")?cache:cache+"/")){const file=new File(normalized);if(file.exists)file.delete();}
+ }catch{/* Best effort; OS cache eviction handles force-close leftovers. */}
 }

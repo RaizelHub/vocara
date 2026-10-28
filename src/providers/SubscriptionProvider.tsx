@@ -77,7 +77,7 @@ type SubscriptionContextValue = {
 const SubscriptionContext = createContext<SubscriptionContextValue | null>(null);
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, deletionPending } = useAuth();
 
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const [isLoading, setIsLoading] = useState(true);
@@ -129,9 +129,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setError(null);
       setStatus("ready");
       setIsLoading(false);
-    } catch (refreshError) {
+    } catch {
       if (!mounted.current || userIdRef.current !== currentUserId) return;
-      if (__DEV__) console.error("[VOCARA subscription refresh]", refreshError);
+      if (__DEV__) console.error("[VOCARA subscription refresh]");
       setError("We couldn't refresh your subscription.");
       setStatus("ready");
       setIsLoading(false);
@@ -139,7 +139,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const userId = user?.id ?? null;
+    const userId = deletionPending ? null : user?.id ?? null;
     userIdRef.current = userId;
     let cancelled = false;
 
@@ -185,9 +185,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
         setStatus("ready");
         setIsLoading(false);
-      } catch (syncError) {
+      } catch {
         if (cancelled) return;
-        if (__DEV__) console.error("[VOCARA subscription bootstrap]", syncError);
+        if (__DEV__) console.error("[VOCARA subscription bootstrap]");
         setError(null);
         setStatus("ready");
         setIsLoading(false);
@@ -197,7 +197,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user?.id]);
+  }, [user?.id, deletionPending]);
 
   useEffect(() => {
     return addCustomerInfoListener((info) => {
@@ -239,7 +239,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           return { status: "cancelled" };
         }
         if (__DEV__ && !norm.userMessage.includes("Expo Go")) {
-          console.warn("[VOCARA purchase]", purchaseError);
+          console.warn("[VOCARA purchase]");
         }
         setError(norm.userMessage);
         return {
@@ -287,7 +287,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (restoreError) {
       const norm = normalizeRevenueCatError(restoreError);
       if (__DEV__ && !norm.userMessage.includes("Expo Go")) {
-        console.warn("[VOCARA restore]", restoreError);
+        console.warn("[VOCARA restore]");
       }
       setError(norm.userMessage);
       return {
@@ -302,8 +302,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const manage = useCallback(async () => {
     try {
       await openManageSubscription(customerInfo);
-    } catch (manageError) {
-      if (__DEV__) console.error("[VOCARA manage subscription]", manageError);
+    } catch {
+      if (__DEV__) console.error("[VOCARA manage subscription]");
       setError("We couldn't open subscription management.");
     }
   }, [customerInfo]);

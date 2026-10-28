@@ -211,10 +211,7 @@ export default {
           .eq("id", resumeId)
           .eq("user_id", userId);
         if (saveTextError) {
-          console.error("[process-resume] Failed to persist extracted text", {
-            resumeId,
-            code: saveTextError.code,
-          });
+          console.error("[process-resume] Failed to persist extracted text");
         }
 
         const { evaluation, validated } = await withGroqRetry(
@@ -294,10 +291,7 @@ export default {
           },
         );
         if (failureUpdateError) {
-          console.error("[process-resume] Failed to persist failure state", {
-            resumeId,
-            code: failureUpdateError.code,
-          });
+          console.error("[process-resume] Failed to persist failure state");
         }
         return errorResponse(
           handled.status,
@@ -324,11 +318,7 @@ async function extractPdfText(
       .from(RESUME_STORAGE_BUCKET)
       .download(resume.storage_path);
     if (error) {
-      console.error("[process-resume] Storage download failed", {
-        resumeId,
-        path: resume.storage_path,
-        code: error.message,
-      });
+      console.error("[process-resume] Storage download failed");
       throw new FunctionError(
         500,
         "resume_download_failed",

@@ -37,3 +37,10 @@ verify_jwt = false
 
 [functions.sync-subscription]
 verify_jwt = true
+
+# Application verifies the user with Auth and checks recent AMR itself (supports modern signing keys).
+[functions.request-account-deletion]
+verify_jwt = false
+# Dedicated server-only worker secret; never callable using a user JWT alone.
+[functions.process-account-deletions]
+verify_jwt = false

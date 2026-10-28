@@ -18,11 +18,17 @@ language sql stable security definer set search_path='' as $$
  and not exists(select 1 from public.account_deletion_jobs where user_id=p_user_id)
 $$;
 revoke all on function public.account_is_active(uuid) from public,anon,authenticated;
-grant execute on function public.account_is_active(uuid) to authenticated,service_role;
+grant execute on function public.account_is_active(uuid) to service_role;
+
+create function public.current_account_is_active() returns boolean
+language sql stable security definer set search_path='' as $$ select public.account_is_active(auth.uid()) $$;
+revoke all on function public.current_account_is_active() from public,anon;
+grant execute on function public.current_account_is_active() to authenticated;
 
 create function public.require_active_account() returns void
 language plpgsql security definer set search_path='' as $$
 begin
+ if auth.uid() is null then raise exception 'NOT_AUTHENTICATED' using errcode='42501'; end if;
  if not public.account_is_active(auth.uid()) then raise exception 'ACCOUNT_UNAVAILABLE' using errcode='42501'; end if;
 end $$;
 revoke all on function public.require_active_account() from public,anon;
@@ -31,11 +37,11 @@ grant execute on function public.require_active_account() to authenticated,servi
 -- Restrictive policies supplement ownership policies; they cannot widen access.
 do $$ declare r record; begin
  for r in select tablename from pg_tables where schemaname='public' and tablename <> 'account_deletion_jobs' loop
-  execute format('create policy account_active_only on public.%I as restrictive for all to authenticated using (public.account_is_active((select auth.uid()))) with check (public.account_is_active((select auth.uid())))',r.tablename);
+  execute format('create policy account_active_only on public.%I as restrictive for all to authenticated using ((select public.current_account_is_active())) with check ((select public.current_account_is_active()))',r.tablename);
  end loop;
 end $$;
 create policy account_active_only on storage.objects as restrictive for all to authenticated
- using (public.account_is_active((select auth.uid()))) with check(public.account_is_active((select auth.uid())));
+ using ((select public.current_account_is_active())) with check((select public.current_account_is_active()));
 
 -- Existing SECURITY DEFINER user RPCs bypass RLS. Preserve their bodies/signatures,
 -- but put the same gate before any statement. Fail migration on an unknown language.
@@ -43,7 +49,7 @@ do $$ declare r record; definition text; begin
  for r in select p.oid,p.proname,l.lanname from pg_proc p join pg_namespace n on n.oid=p.pronamespace
  join pg_language l on l.oid=p.prolang where n.nspname='public' and p.prosecdef
  and p.prorettype <> 'trigger'::regtype and has_function_privilege('authenticated',p.oid,'execute')
- and p.proname not in ('account_is_active','require_active_account') loop
+ and p.proname not in ('account_is_active','current_account_is_active','require_active_account') loop
   if r.lanname <> 'plpgsql' then raise exception 'Review user RPC % before migration',r.proname; end if;
   definition:=pg_get_functiondef(r.oid);
   definition:=regexp_replace(definition,'\mbegin\M','begin PERFORM public.require_active_account();','i');
@@ -56,19 +62,22 @@ end $$;
 -- completion and Storage uploads already in flight. Deletes remain available to worker.
 create function public.block_pending_account_writes() returns trigger
 language plpgsql security definer set search_path='' as $$
-declare owner_id uuid; row_data jsonb:=to_jsonb(new);
+declare v_owner_id uuid; row_data jsonb:=to_jsonb(new);
 begin
  if tg_table_schema='storage' then
   if new.bucket_id not in ('interview-audio','speaking-audio','resumes') then return new; end if;
-  begin owner_id:=split_part(new.name,'/',1)::uuid; exception when invalid_text_representation then raise exception 'INVALID_STORAGE_PATH'; end;
- elsif tg_table_name='profiles' then owner_id:=new.id;
- elsif row_data ? 'user_id' then owner_id:=(row_data->>'user_id')::uuid;
- elsif tg_table_name='interview_questions' then select user_id into owner_id from public.interview_sessions where id=new.session_id;
- elsif tg_table_name='answer_feedback' then select user_id into owner_id from public.interview_answers where id=new.answer_id;
+  begin v_owner_id:=split_part(new.name,'/',1)::uuid; exception when invalid_text_representation then raise exception 'INVALID_STORAGE_PATH'; end;
+ elsif tg_table_name='profiles' then v_owner_id:=new.id;
+ elsif row_data ? 'user_id' then v_owner_id:=(row_data->>'user_id')::uuid;
+ elsif tg_table_name='interview_questions' then select user_id into v_owner_id from public.interview_sessions where id=new.session_id;
+ elsif tg_table_name='answer_feedback' then select user_id into v_owner_id from public.interview_answers where id=new.answer_id;
  end if;
- if owner_id is not null then
-  perform pg_advisory_xact_lock(hashtextextended('privacy:'||owner_id::text,0));
-  if exists(select 1 from public.account_deletion_jobs where user_id=owner_id) then
+ if v_owner_id is not null then
+  perform pg_advisory_xact_lock(hashtextextended('privacy:'||v_owner_id::text,0));
+  -- Once the profile has been deleted, FK SET NULL cascades may finish. New
+  -- rows still fail ownership FKs/RLS; ordinary pending-account writes stay blocked.
+  if exists(select 1 from public.account_deletion_jobs where user_id=v_owner_id)
+   and exists(select 1 from public.profiles where id=v_owner_id) then
    raise exception 'ACCOUNT_DELETION_PENDING' using errcode='42501';
   end if;
  end if;
@@ -130,19 +139,19 @@ end $$;
 revoke all on function public.finish_account_deletion(uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.finish_account_deletion(uuid,uuid,text) to service_role;
 
--- Server-controlled interview state and question content must not be client editable.
+-- Defense in depth: migration 003 already revoked these client column grants.
 revoke update on public.interview_sessions,public.interview_questions from authenticated;
 revoke update(role,interview_type,difficulty,interviewer_style,status,total_questions,started_at,completed_at,duration_seconds) on public.interview_sessions from authenticated;
 revoke update(question_number,question_text,question_type) on public.interview_questions from authenticated;
 create function public.deletion_storage_batch(p_job uuid,p_lease uuid) returns jsonb
 language plpgsql security definer set search_path='' as $$
-declare owner_id uuid;
+declare v_owner_id uuid;
 begin
- select user_id into owner_id from public.account_deletion_jobs where id=p_job and lease_token=p_lease and lease_until>now() and status='processing';
- if owner_id is null then raise exception 'DELETION_LEASE_REQUIRED'; end if;
+ select user_id into v_owner_id from public.account_deletion_jobs where id=p_job and lease_token=p_lease and lease_until>now() and status='processing';
+ if v_owner_id is null then raise exception 'DELETION_LEASE_REQUIRED'; end if;
  return coalesce((select jsonb_agg(jsonb_build_object('bucket',bucket_id,'name',name)) from
  (select bucket_id,name from storage.objects where bucket_id in ('interview-audio','speaking-audio','resumes')
- and (split_part(name,'/',1)=owner_id::text or storage.objects.owner_id=owner_id::text) order by bucket_id,name limit 100) o),'[]'::jsonb);
+ and (split_part(name,'/',1)=v_owner_id::text or storage.objects.owner_id=v_owner_id::text) order by bucket_id,name limit 100) o),'[]'::jsonb);
 end $$;
 revoke all on function public.deletion_storage_batch(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.deletion_storage_batch(uuid,uuid) to service_role;
@@ -153,4 +162,85 @@ language sql security definer set search_path='' as $$
 $$;
 revoke all on function public.confirm_account_processor_erasure(uuid) from public,anon,authenticated;
 grant execute on function public.confirm_account_processor_erasure(uuid) to service_role;
+-- Resume AI state was previously writable through unrestricted INSERT and broad
+-- column UPDATE grants. Only file admission metadata and active selection are client-owned.
+revoke insert,update on public.resumes from authenticated;
+revoke update(is_active,file_name,storage_path,mime_type,file_size_bytes,processing_status,processing_error,analysis_model,analysis_version) on public.resumes from authenticated;
+grant insert(id,user_id,file_name,storage_path,mime_type,file_size_bytes) on public.resumes to authenticated;
+grant update(is_active) on public.resumes to authenticated;
+alter table public.resumes alter column processing_status set default 'uploaded';
+create function public.validate_resume_admission() returns trigger
+language plpgsql security definer set search_path='' as $$
+begin
+ if split_part(new.storage_path,'/',1)<>new.user_id::text or split_part(new.storage_path,'/',2)<>new.id::text then raise exception 'INVALID_RESUME_PATH' using errcode='23514'; end if;
+ if not exists(select 1 from storage.objects where bucket_id='resumes' and name=new.storage_path) then raise exception 'RESUME_UPLOAD_REQUIRED' using errcode='23514'; end if;
+ return new;
+end $$;
+revoke all on function public.validate_resume_admission() from public,anon,authenticated;
+create trigger validate_resume_admission before insert on public.resumes for each row execute function public.validate_resume_admission();
+-- Immutable resume objects prevent changing bytes after cached analysis.
+drop policy if exists resumes_storage_update_own on storage.objects;
+-- Speaking attempts are RPC-only. Storage policies cannot directly SELECT that
+-- table as authenticated. Owner-scoped definer predicates avoid widening table grants.
+create function public.speaking_storage_allowed(p_name text,p_upload boolean) returns boolean
+language sql stable security definer set search_path='' as $$
+ select public.account_is_active(auth.uid()) and split_part(p_name,'/',1)=auth.uid()::text and
+ case when p_upload then exists(select 1 from public.speaking_attempts a where a.user_id=auth.uid()
+ and a.session_id::text=split_part(p_name,'/',2) and a.id::text||'.m4a'=split_part(p_name,'/',3) and cardinality(string_to_array(p_name,'/'))=3)
+ else not exists(select 1 from public.speaking_attempts a where a.user_id=auth.uid() and a.audio_path=p_name) end
+$$;
+revoke all on function public.speaking_storage_allowed(text,boolean) from public,anon;
+grant execute on function public.speaking_storage_allowed(text,boolean) to authenticated;
+drop policy speaking_audio_insert_own on storage.objects;
+create policy speaking_audio_insert_own on storage.objects for insert to authenticated
+ with check(bucket_id='speaking-audio' and owner_id=auth.uid()::text and public.speaking_storage_allowed(name,true));
+drop policy speaking_audio_delete_own on storage.objects;
+create policy speaking_audio_delete_own on storage.objects for delete to authenticated
+ using(bucket_id='speaking-audio' and owner_id=auth.uid()::text and public.speaking_storage_allowed(name,false));
+-- Minimal verified access-request queue; no exported content or email is stored.
+create table public.account_data_requests (
+ id uuid primary key default gen_random_uuid(),user_id uuid not null references public.profiles(id) on delete cascade,
+ requested_at timestamptz not null default now(),status text not null default 'pending' check(status in ('pending','closed'))
+);
+create unique index account_data_requests_one_pending on public.account_data_requests(user_id) where status='pending';
+alter table public.account_data_requests enable row level security;
+revoke all on public.account_data_requests from public,anon,authenticated;
+grant all on public.account_data_requests to service_role;
+create trigger privacy_write_guard before insert or update on public.account_data_requests for each row execute function public.block_pending_account_writes();
+create function public.request_account_data_copy() returns uuid
+language plpgsql security definer set search_path='' as $$
+declare result uuid; u uuid:=auth.uid();
+begin
+ perform public.require_active_account();
+ perform pg_advisory_xact_lock(hashtextextended('privacy:'||u::text,0));
+ select id into result from public.account_data_requests where user_id=u and status='pending';
+ if result is not null then return result; end if;
+ if exists(select 1 from public.account_data_requests where user_id=u and requested_at>now()-interval '1 day') then raise exception 'REQUEST_ALREADY_RECEIVED'; end if;
+ insert into public.account_data_requests(user_id) values(u) returning id into result;
+ return result;
+end $$;
+revoke all on function public.request_account_data_copy() from public,anon;
+grant execute on function public.request_account_data_copy() to authenticated;
+-- Do not rely on a project's implicit Supabase table grants. Speaking lifecycle
+-- fields are server-controlled, even when default privileges grant table INSERT.
+revoke all on public.speaking_sessions,public.speaking_attempts,public.speaking_feedback,public.user_practice_days from public,anon,authenticated;
+grant select on public.speaking_sessions,public.speaking_attempts,public.speaking_feedback,public.user_practice_days to authenticated;
+grant insert(id,user_id,category,prompt_id,prompt_text,prompt_tip,difficulty,time_limit_seconds) on public.speaking_sessions to authenticated;
+-- The resume request ledger lacked RLS and inherited table privileges on a
+-- standard Supabase project. It is exclusively service-owned.
+alter table public.resume_generation_requests enable row level security;
+revoke all on public.resume_generation_requests from public,anon,authenticated;
+grant all on public.resume_generation_requests to service_role;
+-- RLS already denied mutations here; explicit grants also reject attempts early.
+revoke all on public.user_subscriptions,public.feature_usage,public.feature_usage_events from public,anon,authenticated;
+grant select on public.user_subscriptions,public.feature_usage,public.feature_usage_events to authenticated;
+grant all on public.user_subscriptions,public.feature_usage,public.feature_usage_events to service_role;
+revoke all on public.plan_feature_limits,public.revenuecat_webhook_events from public,anon,authenticated;
+grant all on public.plan_feature_limits,public.revenuecat_webhook_events to service_role;
+-- RLS does not govern TRUNCATE; user roles never need schema-level privileges.
+do $$ declare r record; begin
+ for r in select tablename from pg_tables where schemaname='public' loop
+  execute format('revoke truncate,references,trigger on public.%I from public,anon,authenticated',r.tablename);
+ end loop;
+end $$;
 commit;

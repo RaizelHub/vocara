@@ -1,0 +1,86 @@
+-- Disposable synthetic PostgreSQL only. Roles exercise RLS without administrator bypass.
+begin;
+create extension if not exists pgtap with schema extensions;
+set local search_path=public,extensions;
+select plan(45);
+insert into auth.users(id,email) values
+ ('10000000-0000-4000-8000-000000000001','privacy-one@example.invalid'),
+ ('10000000-0000-4000-8000-000000000002','privacy-two@example.invalid');
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
+select public.create_reserved_interview('20000000-0000-4000-8000-000000000001','Engineer','standard','intermediate','balanced','[{"id":"30000000-0000-4000-8000-000000000001","text":"Synthetic question"}]');
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',true);
+select public.create_reserved_interview('20000000-0000-4000-8000-000000000002','Engineer','standard','intermediate','balanced','[{"id":"30000000-0000-4000-8000-000000000002","text":"Other question"}]');
+insert into public.interview_answers(id,user_id,session_id,question_id,transcript) values
+ ('40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Private synthetic transcript');
+insert into storage.objects(bucket_id,name,owner_id) values
+ ('interview-audio','10000000-0000-4000-8000-000000000001/synthetic.m4a','10000000-0000-4000-8000-000000000001'),
+ ('resumes','10000000-0000-4000-8000-000000000001/50000000-0000-4000-8000-000000000001/test.pdf','10000000-0000-4000-8000-000000000001');
+select is((select count(*)::int from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and not c.relrowsecurity),0,'all public tables enable RLS');
+select ok(not has_function_privilege('anon','public.get_feature_usage_summary()','execute'),'anonymous RPC grants revoked');
+select ok(not has_function_privilege('authenticated','public.account_is_active(uuid)','execute'),'users cannot probe other account states');
+set local role authenticated;
+select is(public.request_account_data_copy(),public.request_account_data_copy(),'verified data-copy requests are idempotent');
+select throws_ok($$insert into public.account_data_requests(user_id) values('10000000-0000-4000-8000-000000000001')$$,'42501',null,'data-copy queue cannot impersonate another user');
+select is((select count(*)::int from public.interview_sessions),1,'RLS only exposes own interview');
+select throws_ok($$select * from public.resume_generation_requests$$,'42501',null,'resume request ledger is service-only');
+select throws_ok($$truncate public.revenuecat_webhook_events$$,'42501',null,'client cannot truncate privileged tables');
+select ok(not has_column_privilege('authenticated','public.speaking_sessions','status','insert'),'cannot forge speaking completion through insert');
+select lives_ok($$insert into public.speaking_sessions(id,user_id,category,prompt_id,prompt_text,difficulty,time_limit_seconds) values('60000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002','everyday','synthetic','Describe your day','warm_up',60)$$,'speaking session admission still works');
+select is((select count(*)::int from public.interview_answers),0,'RLS hides another transcript');
+select is((select count(*)::int from storage.objects),0,'RLS hides another recording and resume');
+select is(public.get_interview_recovery('20000000-0000-4000-8000-000000000001'),null::jsonb,'definer recovery verifies ownership');
+select throws_ok($$update public.answer_feedback set improved_answer='forged'$$,'42501',null,'cannot forge feedback');
+select throws_ok($$update public.interview_answers set transcript='forged'$$,'42501',null,'cannot forge transcript');
+select throws_ok($$update public.feature_usage set usage_count=0$$,'42501',null,'cannot alter quota');
+select throws_ok($$update public.user_subscriptions set plan='pro'$$,'42501',null,'cannot forge subscription');
+select throws_ok($$update public.interview_sessions set status='completed'$$,'42501',null,'cannot forge completion');
+select throws_ok($$update public.interview_questions set question_text='forged'$$,'42501',null,'questions immutable');
+select throws_ok($$select public.request_account_deletion('10000000-0000-4000-8000-000000000001')$$,'42501',null,'cannot directly delete another account');
+select throws_ok($$insert into storage.objects(bucket_id,name,owner_id) values('resumes','10000000-0000-4000-8000-000000000001/attack.pdf','10000000-0000-4000-8000-000000000002')$$,'42501',null,'cross-user upload denied');
+select lives_ok($$delete from storage.objects where owner_id='10000000-0000-4000-8000-000000000001'$$,'cross-user delete sees no rows');
+select throws_ok($$insert into public.resumes(user_id,file_name,storage_path,mime_type,file_size_bytes,extracted_text) values('10000000-0000-4000-8000-000000000002','test.pdf','bad','application/pdf',100,'forged')$$,'42501',null,'client cannot inject extracted resume text');
+select throws_ok($$update public.resumes set processing_status='completed'$$,'42501',null,'client cannot forge resume processing');
+reset role;
+select is((select count(*)::int from storage.objects),2,'cross-user delete preserved all objects');
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',true);
+set local role authenticated;
+select is((select transcript from public.interview_answers limit 1),'Private synthetic transcript','owner can read own transcript');
+select is((select count(*)::int from storage.objects),2,'owner can read own private files');
+select lives_ok($$insert into public.resumes(id,user_id,file_name,storage_path,mime_type,file_size_bytes) values('50000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','test.pdf','10000000-0000-4000-8000-000000000001/50000000-0000-4000-8000-000000000001/test.pdf','application/pdf',100)$$,'normal resume admission works');
+reset role;
+select public.request_account_deletion('10000000-0000-4000-8000-000000000001');
+select public.request_account_deletion('10000000-0000-4000-8000-000000000001');
+select is((select count(*)::int from public.account_deletion_jobs),1,'duplicate request has one durable job');
+set local role authenticated;
+select is((select count(*)::int from public.interview_answers),0,'pending account cannot read saved answers');
+select is((select count(*)::int from storage.objects),0,'pending account cannot obtain new private file access');
+select throws_ok($$select public.get_interview_recovery('20000000-0000-4000-8000-000000000001')$$,'42501','ACCOUNT_UNAVAILABLE','pending account cannot bypass RLS via RPC');
+select is(public.get_account_deletion_status()->>'status','pending','pending user can check deletion status');
+select throws_ok($$select public.claim_account_deletion()$$,'42501',null,'user cannot invoke worker');
+reset role;
+select throws_ok($$update public.interview_answers set transcript='late completion' where id='40000000-0000-4000-8000-000000000001'$$,'42501','ACCOUNT_DELETION_PENDING','late service completion cannot write after deletion request');
+select is(public.claim_account_deletion(),null::jsonb,'drain window prevents immediate destructive processing');
+update public.account_deletion_jobs set available_at=now();
+select public.claim_account_deletion();
+select is(public.claim_account_deletion(),null::jsonb,'live lease prevents duplicate worker');
+select public.finish_account_deletion(id,lease_token,'SYNTHETIC_FAILURE') from public.account_deletion_jobs;
+select is((select status from public.account_deletion_jobs),'failed','failure remains recoverable');
+update public.account_deletion_jobs set available_at=now();
+select public.claim_account_deletion();
+select is((select attempts from public.account_deletion_jobs),2,'retry claims same job');
+select throws_ok($$select public.finish_account_deletion(id,lease_token,null) from public.account_deletion_jobs$$,'P0001','AUTH_DELETION_REQUIRED','cannot falsely mark surviving Auth account deleted');
+-- Synthetic fixture cleanup only; real worker uses Storage API, then Auth API.
+delete from storage.objects where owner_id='10000000-0000-4000-8000-000000000001';
+delete from auth.users where id='10000000-0000-4000-8000-000000000001';
+select public.finish_account_deletion(id,lease_token,null) from public.account_deletion_jobs;
+select is((select count(*)::int from public.interview_answers),0,'Auth cascade deletes answers');
+select is((select user_id from public.account_deletion_jobs),null::uuid,'completed job removes account identifier');
+set local role authenticated;
+select is((select count(*)::int from public.profiles),0,'stale deleted identity sees no profile');
+select throws_ok($$select public.get_user_practice_metrics()$$,'42501','ACCOUNT_UNAVAILABLE','stale deleted JWT cannot call user RPC');
+reset role;
+set local role anon;
+select throws_ok($$select * from public.interview_answers$$,'42501',null,'anonymous cannot read sensitive data');
+reset role;
+select * from finish();
+rollback;

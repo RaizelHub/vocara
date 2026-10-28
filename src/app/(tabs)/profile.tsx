@@ -27,6 +27,9 @@ type MenuItem = {
 const MENU: MenuItem[] = [
   { icon: "briefcase-outline", label: "Career & Target Role", href: "/career-setup" },
   { icon: "pie-chart-outline", label: "Usage & Daily Limits", href: "/usage" },
+  { icon: "shield-checkmark-outline", label: "Privacy Policy", href: "/privacy" },
+  { icon: "document-text-outline", label: "Terms", href: "/terms" },
+  { icon: "trash-outline", label: "Delete Account", href: "/account/delete" },
   { icon: "log-out-outline", label: "Log out", destructive: true },
 ];
 

@@ -1,3 +1,4 @@
+import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
 import { withSupabase } from "npm:@supabase/server@1.4.1";
 
@@ -41,7 +42,7 @@ export default {
       try {
         ({ event } = parseRevenueCatEvent(rawBody));
       } catch (error) {
-        console.error("[revenuecat-webhook] Invalid payload", error);
+        console.error("[revenuecat-webhook] Invalid payload");
         return Response.json({ error: "invalid_payload" }, { status: 400 });
       }
 
@@ -53,10 +54,7 @@ export default {
         if (markError.message.includes("duplicate key")) {
           return Response.json({ received: true, duplicate: true });
         }
-        console.error("[revenuecat-webhook] Failed to mark event", {
-          eventId: event.id,
-          code: markError.code,
-        });
+        console.error("[revenuecat-webhook] Failed to mark event");
         return Response.json({ error: "storage_failed" }, { status: 500 });
       }
 
@@ -67,18 +65,11 @@ export default {
           .update({ processed_at: new Date().toISOString() })
           .eq("event_id", event.id);
         if (doneError) {
-          console.error("[revenuecat-webhook] Failed to finalize event", {
-            eventId: event.id,
-            code: doneError.code,
-          });
+          console.error("[revenuecat-webhook] Failed to finalize event");
         }
         return Response.json({ received: true });
       } catch (error) {
-        console.error("[revenuecat-webhook] Event processing failed", {
-          eventId: event.id,
-          type: event.type,
-          error,
-        });
+        console.error("[revenuecat-webhook] Event processing failed");
         return Response.json({ error: "processing_failed" }, { status: 500 });
       }
     },
@@ -90,6 +81,9 @@ async function applyEvent(
   event: RevenueCatEvent,
 ) {
   const userId = event.app_user_id;
+  const denied = await accountAccessResponse(context.supabaseAdmin, userId);
+  if (denied?.status === 503) throw new Error("ACCOUNT_CHECK_UNAVAILABLE");
+  if (denied) return; // Never recreate entitlements for deleted/pending accounts.
 
   const { data: existing } = await context.supabaseAdmin
     .from("user_subscriptions")

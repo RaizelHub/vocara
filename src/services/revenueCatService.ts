@@ -10,14 +10,9 @@ import Purchases, {
 import RevenueCatUI, { PAYWALL_RESULT } from "react-native-purchases-ui";
 
 const testApiKey = process.env.EXPO_PUBLIC_REVENUECAT_TEST_API_KEY?.trim();
-const iosApiKey = process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY?.trim();
-const androidApiKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY?.trim();
 
 export function getRevenueCatApiKey(): string {
-  if (testApiKey) return testApiKey;
-  if (Platform.OS === "ios" && iosApiKey) return iosApiKey;
-  if (Platform.OS === "android" && androidApiKey) return androidApiKey;
-  return "";
+  return testApiKey?.startsWith("test_") ? testApiKey : "";
 }
 
 export const isNativePurchasesAvailable = Boolean(
@@ -56,9 +51,7 @@ let initialized = false;
 export async function configureRevenueCat(appUserId?: string): Promise<boolean> {
   if (!isNativePurchasesAvailable) {
     if (__DEV__) {
-      console.warn(
-        "[VOCARA RevenueCat] Native module RNPurchases is not available in Expo Go. Use an Expo Development Build for real transactions.",
-      );
+      console.warn("[VOCARA RevenueCat] Native module RNPurchases is not available in Expo Go. Use an Expo Development Build for real transactions.");
     }
     return false;
   }
@@ -66,9 +59,7 @@ export async function configureRevenueCat(appUserId?: string): Promise<boolean> 
   const apiKey = getRevenueCatApiKey();
   if (!apiKey) {
     if (__DEV__) {
-      console.warn(
-        "[VOCARA RevenueCat] EXPO_PUBLIC_REVENUECAT_TEST_API_KEY is not set in .env",
-      );
+      console.warn("[VOCARA RevenueCat] EXPO_PUBLIC_REVENUECAT_TEST_API_KEY is not set in .env");
     }
     return false;
   }
@@ -77,15 +68,16 @@ export async function configureRevenueCat(appUserId?: string): Promise<boolean> 
     if (appUserId) {
       try {
         await Purchases.logIn(appUserId);
-      } catch (loginErr) {
-        if (__DEV__) console.error("[VOCARA RevenueCat login]", loginErr);
+      } catch {
+        if (__DEV__) console.error("[VOCARA RevenueCat login]");
       }
     }
     return true;
   }
 
   try {
-    Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
+    Purchases.setLogLevel(LOG_LEVEL.ERROR);
+    Purchases.setLogHandler(() => {}); // SDK messages may include customer/receipt details.
     if (appUserId) {
       Purchases.configure({ apiKey, appUserID: appUserId });
     } else {
@@ -93,8 +85,8 @@ export async function configureRevenueCat(appUserId?: string): Promise<boolean> 
     }
     initialized = true;
     return true;
-  } catch (configError) {
-    if (__DEV__) console.error("[VOCARA RevenueCat configure]", configError);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat configure]");
     return false;
   }
 }
@@ -113,8 +105,8 @@ export async function loginRevenueCat(appUserId: string): Promise<CustomerInfo |
   try {
     const result = await Purchases.logIn(appUserId);
     return result.customerInfo;
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat logIn]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat logIn]");
     return getCustomerInfo();
   }
 }
@@ -124,8 +116,8 @@ export async function logoutRevenueCat(): Promise<CustomerInfo | null> {
   try {
     const result = await Purchases.logOut();
     return result;
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat logOut]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat logOut]");
     return null;
   }
 }
@@ -134,8 +126,8 @@ export async function getOfferings(): Promise<PurchasesOfferings | null> {
   if (!initialized || !isNativePurchasesAvailable) return null;
   try {
     return await Purchases.getOfferings();
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat getOfferings]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat getOfferings]");
     return null;
   }
 }
@@ -144,8 +136,8 @@ export async function getCustomerInfo(): Promise<CustomerInfo | null> {
   if (!initialized || !isNativePurchasesAvailable) return null;
   try {
     return await Purchases.getCustomerInfo();
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat getCustomerInfo]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat getCustomerInfo]");
     return null;
   }
 }
@@ -232,8 +224,8 @@ export function addCustomerInfoListener(
       Purchases.addCustomerInfoUpdateListener((info) => {
         for (const registered of customerInfoListeners) registered(info);
       });
-    } catch (err) {
-      if (__DEV__) console.error("[VOCARA RevenueCat addCustomerInfoListener]", err);
+    } catch {
+      if (__DEV__) console.error("[VOCARA RevenueCat addCustomerInfoListener]");
     }
   }
   return () => {
@@ -375,8 +367,8 @@ export async function presentPaywallIfNeeded(
       requiredEntitlementIdentifier,
     });
     return mapPaywallResult(result);
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat presentPaywall]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat presentPaywall]");
     return {
       status: "error",
       message: "We couldn't open the upgrade screen. Please try again.",
@@ -402,8 +394,8 @@ export async function presentPaywall(
       offering ? { offering } : undefined,
     );
     return mapPaywallResult(result);
-  } catch (error) {
-    if (__DEV__) console.error("[VOCARA RevenueCat presentPaywall]", error);
+  } catch {
+    if (__DEV__) console.error("[VOCARA RevenueCat presentPaywall]");
     return {
       status: "error",
       message: "We couldn't open the upgrade screen. Please try again.",
