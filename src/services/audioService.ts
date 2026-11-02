@@ -1,3 +1,4 @@
+import { AudioUploadError } from "./audioErrors";
 import { CryptoDigestAlgorithm, digest, randomUUID } from "expo-crypto";
 import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
@@ -125,7 +126,7 @@ export const audioService = {
   },
 
   createSpeakingAttemptPath(userId: string, sessionId: string, attemptId: string) {
-    return `${userId}/${sessionId}/${attemptId}/${randomUUID()}.m4a`;
+    return `${userId}/${sessionId}/${attemptId}.m4a`;
   },
 
   async uploadSpeakingAudio(input: UploadAnswerAudioInput): Promise<UploadedAnswerAudio> {
@@ -298,68 +299,4 @@ async function sha256(blob: Blob) {
   ).join("");
 }
 
-export class AudioUploadError extends Error {
-  code: string;
-  status?: number;
-  details?: string;
-
-  constructor(code: string, message: string, status?: number, details?: string) {
-    super(message);
-    this.name = "AudioUploadError";
-    this.code = code;
-    this.status = status;
-    this.details = details;
-  }
-}
-
-export function canRetryAudioUpload(error: unknown) {
-  if (error instanceof AudioUploadError) {
-    return ![
-      "forbidden",
-      "path_conflict",
-      "too_large",
-      "unauthorized",
-      "unsupported_mime",
-    ].includes(error.code);
-  }
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  return ![
-    "too large",
-    "format is not supported",
-    "file is unavailable",
-  ].some((value) => message.includes(value));
-}
-
-export function audioUploadRequiresAuthentication(error: unknown) {
-  return error instanceof AudioUploadError && error.code === "unauthorized";
-}
-
-export function getAudioUploadErrorMessage(error: unknown) {
-  if (error instanceof AudioUploadError && error.code === "unauthorized") {
-    return "Your session expired. Sign in again before retrying.";
-  }
-  if (error instanceof AudioUploadError && error.code === "path_conflict") {
-    return "We couldn't verify this upload. Record your answer again to create a fresh file.";
-  }
-  if (error instanceof AudioUploadError && error.code === "too_large") {
-    return "This recording is too large. Record a shorter answer and try again.";
-  }
-  if (error instanceof AudioUploadError && error.code === "unsupported_mime") {
-    return "Storage rejected this recording format. Please record your answer again.";
-  }
-  const message = error instanceof Error ? error.message.toLowerCase() : "";
-  if (message.includes("too large")) {
-    return "This recording is too large. Record a shorter answer and try again.";
-  }
-  if (message.includes("format")) {
-    return "This recording format isn't supported. Please record your answer again.";
-  }
-  if (
-    message.includes("network") ||
-    message.includes("fetch") ||
-    message.includes("timed out")
-  ) {
-    return "Couldn't upload your answer. Check your connection and try again.";
-  }
-  return "Couldn't upload your answer. Your local recording is still available.";
-}
+export { AudioUploadError, canRetryAudioUpload, audioUploadRequiresAuthentication, getAudioUploadErrorMessage } from "./audioErrors";

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Platform, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -17,6 +17,7 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { dailyPrompt } from "@/data/speakingPrompts";
 import { getDataErrorMessage, isAuthenticationError } from "@/lib/dataErrors";
 import { useAuth } from "@/providers/AuthProvider";
+import { useSubscription } from "@/providers/SubscriptionProvider";
 import { FOCUS_AREA_LABELS } from "@/services/careerSetupService";
 import {
   fetchUserPracticeMetrics,
@@ -37,6 +38,11 @@ function greetingForHour(hour: number) {
 }
 
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === "web" && width >= 1200;
+  const { usage, status: usageStatus } = useSubscription();
+  const allowance = usage.find(item => item.feature === "ai_feedback");
+  const remaining = allowance?.limit_value == null ? null : Math.max(0, allowance.limit_value - (allowance.used ?? 0));
   const { profile, user, focusAreas, signOut } = useAuth();
   const insets = useSafeAreaInsets();
   const [metrics, setMetrics] = useState<UserPracticeMetrics | null>(null);
@@ -77,10 +83,10 @@ export default function HomeScreen() {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     const timer = setTimeout(() => void load(), 0);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [load]));
 
   const handleReauthenticate = useCallback(() => {
     void signOut()
@@ -164,7 +170,7 @@ export default function HomeScreen() {
   const skillsEnter = FadeInDown.delay(300).duration(420);
   const recentEnter = FadeInDown.delay(380).duration(420);
 
-  const skills = metrics ? toPracticeSkills(metrics.skills) : [];
+  const skills = metrics?.skills ? toPracticeSkills(metrics.skills) : [];
   const sessions = metrics ? toRecentSessions(metrics.recentSessions) : [];
   const todayPrompt = dailyPrompt();
 
@@ -179,7 +185,7 @@ export default function HomeScreen() {
       {header}
 
       <Animated.ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, Platform.OS === "web" && styles.webContent]}
         showsVerticalScrollIndicator={false}
         entering={FadeInDown.delay(0).duration(300)}
       >
@@ -191,8 +197,13 @@ export default function HomeScreen() {
             {greetingForHour(new Date().getHours())}, {firstName}
           </Text>
           <Text style={styles.greetingTagline}>Ready for your next interview simulation?</Text>
+          {Platform.OS === "web" && <Text style={styles.greetingTagline}>
+            {usageStatus === "ready" && remaining !== null ? `${remaining} answer allowances available` : "Allowance is checked before each interview."}
+          </Text>}
         </View>
 
+        <View style={desktop && styles.columns}>
+        <View style={desktop && styles.mainColumn}>
         <Animated.View entering={heroEnter}>
           <ReadinessHero
             score={readinessScore}
@@ -206,7 +217,8 @@ export default function HomeScreen() {
         <Animated.View entering={modesEnter} style={styles.section}>
           <PracticeModes />
         </Animated.View>
-
+        </View>
+        <View style={desktop && styles.supportColumn}>
         <Animated.View entering={challengeEnter} style={styles.section}>
           <DailyChallenge
             question={todayPrompt.text}
@@ -225,12 +237,18 @@ export default function HomeScreen() {
         <Animated.View entering={recentEnter} style={styles.section}>
           <RecentPractice sessions={sessions} />
         </Animated.View>
+        </View>
+        </View>
       </Animated.ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  webContent: { width: "100%", maxWidth: 1240, alignSelf: "center" },
+  columns: { flexDirection: "row", gap: 32, alignItems: "flex-start" },
+  mainColumn: { flex: 1, minWidth: 0 },
+  supportColumn: { width: 340 },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

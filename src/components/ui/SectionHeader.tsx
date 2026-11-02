@@ -23,7 +23,7 @@ export function SectionHeader({
     <View style={styles.container}>
       <View style={styles.row}>
         <View style={styles.titleGroup}>
-          <Text style={styles.title}>{title}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{title}</Text>
           {badge ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{badge}</Text>
@@ -61,6 +61,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   titleGroup: {
+    flexShrink: 1,
+    flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

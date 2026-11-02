@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -292,6 +292,7 @@ const styles = StyleSheet.create({
     width: 24,
   },
   content: {
+    ...(Platform.OS === "web" ? { width: "100%" as const, maxWidth: 900, alignSelf: "center" as const } : {}),
     paddingHorizontal: 20,
     paddingBottom: 44,
   },

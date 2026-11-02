@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -83,12 +83,12 @@ export default function InterviewResultScreen() {
           onRetry={authExpired ? handleReauthenticate : () => void load()}
         />
       ) : result ? (
-        <View style={styles.body}>
+        <ScrollView contentContainerStyle={styles.body}>
           <Text style={styles.score} accessibilityLabel={`Score ${result.score}`}>
             {result.score}
           </Text>
           <Text style={styles.scoreLabel}>out of 100</Text>
-          <Text style={styles.title}>{result.role}</Text>
+          <Text accessibilityRole="header" style={styles.title}>{result.role}</Text>
           <Text style={styles.meta}>
             {result.interviewType} · {result.completedAt} · {result.durationMinutes} min
           </Text>
@@ -101,7 +101,7 @@ export default function InterviewResultScreen() {
               <Text style={styles.pillText}>Open full review</Text>
             </View>
           </PressableScale>
-        </View>
+        </ScrollView>
       ) : null}
     </View>
   );
@@ -116,7 +116,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   body: {
-    flex: 1,
+    flexGrow: 1,
+    ...(Platform.OS === "web" ? { width: "100%" as const, maxWidth: 900, alignSelf: "center" as const } : {}),
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 32,

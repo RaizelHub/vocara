@@ -11,6 +11,11 @@
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
+      "developmentClient": false,
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      },
       "android": {
         "buildType": "apk"
       }

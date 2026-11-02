@@ -52,6 +52,8 @@
     "vitest": "^4.1.10"
   },
   "scripts": {
+    "eas-build-post-install": "node scripts/check-beta-env.cjs",
+    "test:beta": "node --test scripts/check-beta-env.test.cjs",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

@@ -295,7 +295,7 @@ export function useAnswerRecorder() {
       mounted.current = false;
       generation.current += 1;
       deleteLocalFile(recordingRef.current?.uri ?? activeUri.current);
-      void setPlaybackAudioMode();
+      void setPlaybackAudioMode().catch(() => undefined);
     };
   }, []);
 

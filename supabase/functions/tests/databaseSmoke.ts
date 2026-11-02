@@ -45,7 +45,7 @@ try {
     console.log(`Applied in memory: ${name}`);
   }
   let count = 0;
-  for (const name of ["interview_reliability.test.sql", "ai_usage.test.sql", "privacy.test.sql", "retention.test.sql"]) {
+  for (const name of ["interview_reliability.test.sql", "ai_usage.test.sql", "privacy.test.sql", "retention.test.sql", "browser_audio.test.sql"]) {
     const results = await db.exec(
       await Deno.readTextFile(`supabase/tests/database/${name}`),
     );

@@ -12,6 +12,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { randomUUID } from "expo-crypto";
 
 import { AttemptFeedbackCard } from "@/components/speaking/AttemptFeedbackCard";
 import { LiveWaveform } from "@/components/interview/LiveWaveform";
@@ -181,6 +182,7 @@ export default function SpeakingSessionScreen() {
     stateRef.current = state;
   }, [state]);
   const busyRef = useRef(false);
+  const pendingReservation = useRef<{uri:string;id:string}|null>(null);
 
   const loadSession = useCallback(async () => {
     if (!params.sessionId) {
@@ -207,15 +209,12 @@ export default function SpeakingSessionScreen() {
         });
         return;
       }
-      if (
-        last &&
-        last.transcriptionStatus !== "completed" &&
-        last.attemptId
-      ) {
-        await speakingService.closeSession(payload.session.id, "abandoned").catch(() => undefined);
-      }
+      const pending = last ? await speakingService.getAttempt(last.attemptId) : null;
       dispatch({ type: "loaded", session: payload.session, attempts });
-      dispatch({ type: "ready", attempt: null, limitSeconds: payload.session.timeLimitSeconds });
+      dispatch({ type: "ready", attempt: pending, limitSeconds: payload.session.timeLimitSeconds });
+      if (pending?.audio_path) dispatch({ type: "failure", failure: {
+        stage: "transcription", message: "Your recording is saved. Retry processing to continue; any active server operation will be reused or report that it is still busy.", retryable: true,
+      } });
     } catch (error) {
       dispatch({
         type: "failure",
@@ -291,6 +290,8 @@ export default function SpeakingSessionScreen() {
     busyRef.current = true;
     try {
       await recorder.discardRecording();
+      pendingReservation.current=null;
+      dispatch({ type: "ready", attempt: null, limitSeconds: session.timeLimitSeconds });
       dispatch({ type: "recording" });
       await recorder.startRecording();
     } catch (error) {
@@ -311,18 +312,28 @@ export default function SpeakingSessionScreen() {
   const runPipeline = useCallback(async () => {
     const session = stateRef.current.session;
     const recording = recorder.recording;
-    if (!session || !recording || busyRef.current || !user) return;
+    if (!session || (!recording && !stateRef.current.currentAttempt?.audio_path) || busyRef.current || !user) return;
     busyRef.current = true;
     let attempt: SpeakingAttemptRecord | null = null;
     try {
       dispatch({ type: "processing", stage: "upload" });
-      attempt = await speakingService.reserveAttempt(session.id, user.id);
+      attempt = stateRef.current.currentAttempt;
+      if (!attempt) {
+        if (!recording) throw new Error("Recording unavailable");
+        if (pendingReservation.current?.uri!==recording.uri) pendingReservation.current={uri:recording.uri,id:randomUUID()};
+        attempt = await speakingService.reserveAttempt(session.id, user.id, pendingReservation.current.id);
+        dispatch({type:"attached",attempt});
+      }
+      if (!attempt.audio_path) {
+      if (!recording) throw new Error("Recording unavailable. Record your answer again.");
       const path = audioService.createSpeakingAttemptPath(user.id, session.id, attempt.id);
       const uploaded = await audioService.uploadSpeakingAudio({
         localUri: recording.uri,
         audioPath: path,
       });
-      await speakerAttach(attempt, uploaded, recording.durationSeconds);
+      attempt = await speakerAttach(attempt, uploaded, recording.durationSeconds);
+      dispatch({type:"attached",attempt});
+      }
 
       dispatch({ type: "processing", stage: "transcription" });
       await speakingService.transcribeAttempt(attempt.id);
@@ -373,8 +384,8 @@ export default function SpeakingSessionScreen() {
       return;
     }
     try {
-      const attempt = await speakingService.reserveAttempt(session.id, user.id);
-      dispatch({ type: "ready", attempt, limitSeconds: session.timeLimitSeconds });
+      pendingReservation.current=null;
+      dispatch({ type: "ready", attempt: null, limitSeconds: session.timeLimitSeconds });
     } catch (error) {
       if (error instanceof Error && /SPEAKING_ATTEMPT_LIMIT/.test(error.message)) {
         await finishSession("completed", () =>
@@ -711,7 +722,7 @@ async function speakerAttach(
   uploaded: UploadedAnswerAudio,
   durationSeconds: number,
 ) {
-  await speakingService.attachAudio({
+  return speakingService.attachAudio({
     attemptId: attempt.id,
     audioPath: uploaded.path,
     durationSeconds,

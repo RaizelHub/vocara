@@ -17,6 +17,10 @@ export function getAuthErrorMessage(error: unknown, operation: AuthOperation): s
   const details = toErrorShape(error);
   const code = details.code?.toLowerCase() ?? "";
   const message = details.message?.toLowerCase() ?? "";
+  if (message.includes("session storage") || message.includes("clear the session")) {
+    return "Allow session storage for Vocara in your browser settings and retry. If signing out fails, close this tab and clear Vocara site data.";
+  }
+  if (message.includes("over https")) return "Open Vocara over HTTPS before requesting an authentication email.";
 
   if (__DEV__ && !isExpectedAuthFailure(code, message)) {
     // Logging the Error object with console.error opens React Native's error

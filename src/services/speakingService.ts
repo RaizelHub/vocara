@@ -76,17 +76,25 @@ id: randomUUID(),
   async reserveAttempt(
     sessionId: string,
     userId: string,
+    attemptId = randomUUID(),
   ): Promise<SpeakingAttemptRecord> {
     assertSupabaseConfigured();
 
     const { data, error } = await supabase.rpc("reserve_speaking_attempt", {
-      p_attempt_id: randomUUID(),
+        p_attempt_id: attemptId,
       p_session_id: sessionId,
       p_user_id: userId,
     });
     if (error) throw error;
     if (!data) throw new Error("We couldn't reserve a speaking attempt.");
     return data as SpeakingAttemptRecord;
+  },
+
+  async getAttempt(attemptId: string): Promise<SpeakingAttemptRecord | null> {
+    assertSupabaseConfigured();
+    const { data, error } = await supabase.from("speaking_attempts").select("*").eq("id", attemptId).maybeSingle();
+    if (error) throw error;
+    return data as SpeakingAttemptRecord | null;
   },
 
   async attachAudio(input: {

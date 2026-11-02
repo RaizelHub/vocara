@@ -145,7 +145,7 @@ export default function ProgressScreen() {
           entering={FadeInDown.delay(0).duration(300)}
         >
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>Your Progress</Text>
+            <Text accessibilityRole="header" style={styles.title}>Your Progress</Text>
             <Text style={styles.subtitle}>Track your readiness, skill growth, and consistency.</Text>
           </View>
 
@@ -307,6 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   content: {
+    ...(Platform.OS === "web" ? { width: "100%" as const, maxWidth: 960, alignSelf: "center" as const } : {}),
     paddingHorizontal: 20,
     paddingBottom: 48,
   },

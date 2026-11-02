@@ -32,7 +32,7 @@ function SessionRow({ session }: SessionSummaryProps) {
           <Ionicons name={TYPE_ICONS[session.type]} size={18} color={colors.accent} />
         </View>
         <View style={styles.meta}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.title} numberOfLines={2}>
             {session.title}
           </Text>
           <Text style={styles.subtitle}>
@@ -153,6 +153,7 @@ const styles = StyleSheet.create({
   },
   meta: {
     flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 15,

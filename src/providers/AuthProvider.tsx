@@ -58,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const explicitAuthEmail = useRef<string | null>(null);
 
   useEffect(() => {
+    mounted.current = true;
     return () => {
       mounted.current = false;
     };
@@ -322,6 +323,9 @@ export function useAuth() {
 
 function getProfileLoadMessage(error: unknown) {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("session storage")) {
+    return "Allow session storage for Vocara in your browser settings, then try again.";
+  }
   if (message.includes("network") || message.includes("fetch")) {
     return "We couldn't connect. Check your internet connection and try again.";
   }

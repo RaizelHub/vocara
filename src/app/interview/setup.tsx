@@ -208,7 +208,7 @@ export default function InterviewSetupScreen() {
         <BackButton onPress={() => router.back()} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.content, Platform.OS === "web" && styles.webContent]} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>Set up your interview</Text>
         <Text style={styles.subtitle}>Choose how you want Vocara to challenge you.</Text>
 
@@ -510,6 +510,7 @@ export default function InterviewSetupScreen() {
 }
 
 const styles = StyleSheet.create({
+  webContent: { width: "100%", maxWidth: 900, alignSelf: "center" },
   screen: {
     flex: 1,
     backgroundColor: colors.background,

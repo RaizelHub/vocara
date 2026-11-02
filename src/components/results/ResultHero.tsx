@@ -81,6 +81,7 @@ const styles = StyleSheet.create({
   },
   scoreRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "flex-end",
     justifyContent: "space-between",
     gap: 14,
@@ -102,12 +103,14 @@ const styles = StyleSheet.create({
     color: colors.secondary,
   },
   change: {
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     paddingBottom: 7,
   },
   changeText: {
+    flexShrink: 1,
     fontSize: 12.5,
     fontWeight: "800",
     color: colors.success,

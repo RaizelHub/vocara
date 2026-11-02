@@ -1,6 +1,7 @@
-import { forwardRef, type ReactNode, useCallback } from "react";
+import { forwardRef, type ReactNode, useCallback, useState } from "react";
 import {
   Pressable,
+  Platform,
   type AccessibilityState,
   type StyleProp,
   type View,
@@ -11,6 +12,7 @@ import Animated, {
   useSharedValue,
   withSpring,
 } from "react-native-reanimated";
+import { colors } from "@/theme/colors";
 
 export type PressableScaleProps = {
   children: ReactNode;
@@ -47,6 +49,7 @@ export const PressableScale = forwardRef<View, PressableScaleProps>(function Pre
   ref,
 ) {
   const scale = useSharedValue(1);
+  const [focused, setFocused] = useState(false);
 
   const handlePressIn = useCallback(() => {
     scale.value = withSpring(activeScale, { damping: 14, stiffness: 380 });
@@ -66,13 +69,21 @@ export const PressableScale = forwardRef<View, PressableScaleProps>(function Pre
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityState={{ ...accessibilityState, disabled: !!disabled }}
+      aria-expanded={accessibilityState?.expanded}
+      aria-selected={accessibilityState?.selected}
+      aria-busy={accessibilityState?.busy}
+      aria-checked={accessibilityState?.checked}
       onPress={disabled ? undefined : onPress}
       onLongPress={disabled ? undefined : onLongPress}
       onPressIn={disabled ? undefined : handlePressIn}
       onPressOut={disabled ? undefined : handlePressOut}
       disabled={disabled}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
       hitSlop={collapsed ? 10 : undefined}
-      style={[style, animatedStyle]}
+      style={[style, animatedStyle, Platform.OS === "web" && focused && !disabled && {
+        outlineColor: colors.accent, outlineWidth: 2, outlineStyle: "solid", outlineOffset: -2,
+      }]}
     >
       {children}
     </AnimatedPressable>

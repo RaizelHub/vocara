@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, View, type ColorValue } from "react-native";
+import { Platform, StyleSheet, View, useWindowDimensions, type ColorValue } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 
@@ -27,12 +27,17 @@ function tabIcon(focused: IconName, unfocused: IconName) {
 }
 
 export default function TabsLayout() {
+  const { width } = useWindowDimensions();
+  const desktop = Platform.OS === "web" && width >= 1024;
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarPosition: desktop ? "left" : "bottom",
+        tabBarLabelPosition: desktop ? "beside-icon" : "below-icon",
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.secondary,
+        tabBarActiveBackgroundColor: desktop ? colors.accentLight : undefined,
         tabBarHideOnKeyboard: true,
         tabBarStyle: {
           backgroundColor: colors.surface,
@@ -56,6 +61,7 @@ export default function TabsLayout() {
             },
             default: {},
           }),
+          ...(desktop ? { height: "100%", width: 200, minWidth: 200, maxWidth: 200, paddingTop: 24, borderTopWidth: 0, borderRightWidth: 1, borderRightColor: colors.borderSubtle } : {}),
         },
         tabBarLabelStyle: {
           fontSize: 11,

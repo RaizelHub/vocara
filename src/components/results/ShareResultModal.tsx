@@ -1,4 +1,5 @@
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect } from "react";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -16,6 +17,14 @@ export type ShareResultModalProps = {
 
 export function ShareResultModal({ visible, result, onClose }: ShareResultModalProps) {
   const insets = useSafeAreaInsets();
+  useEffect(() => {
+    if (Platform.OS !== "web" || !visible) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onClose(); }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [visible, onClose]);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -70,6 +79,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
+    ...(Platform.OS === "web" ? { width: "100%" as const, maxWidth: 560, alignSelf: "center" as const } : {}),
     maxHeight: "92%",
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
@@ -90,8 +100,8 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   close: {
-    width: 38,
-    height: 38,
+    width: 44,
+    height: 44,
     borderRadius: 19,
     backgroundColor: colors.surface,
     borderWidth: 1,

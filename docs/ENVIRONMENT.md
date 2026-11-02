@@ -4,6 +4,13 @@ Everything you need to stand up the app, edge functions, and the RevenueCat
 integration. Secrets never ship in the client bundle: client code only reads
 `EXPO_PUBLIC_*` variables; everything else lives in Supabase function secrets.
 
+> Phase 4 beta override: use only `EXPO_PUBLIC_REVENUECAT_TEST_API_KEY`
+> (`test_` prefix). The platform production keys described below are historical
+> setup notes and are not used by this beta. Do not activate production products.
+> Preview selects the EAS `preview` environment and disables automatic Sentry
+> source uploads. See `ANDROID_BETA_GUIDE.md` for the current release procedure.
+> An `EXPO_PUBLIC_` prefix makes a value public; it does not make a private secret safe.
+
 ## Client (`.env` / `.env.example`)
 
 Copied from `.env.example` and filled in locally. Injected at bundle time by

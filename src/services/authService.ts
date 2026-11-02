@@ -1,5 +1,6 @@
 import type { EmailOtpType, Session, User } from "@supabase/supabase-js";
 import { assertSupabaseConfigured, supabase } from "@/lib/supabase";
+import { authCallbackUrl } from "@/lib/authRedirect";
 
 export type SignUpInput = {
   fullName: string;
@@ -20,10 +21,6 @@ export type SignUpResult = AuthResult & {
 export type AuthCallbackFlow = "verification" | "recovery";
 
 const callbackRequests = new Map<string, Promise<AuthCallbackFlow>>();
-
-function authCallbackUrl(flow: AuthCallbackFlow) {
-  return `vocara://auth/callback?flow=${encodeURIComponent(flow)}`;
-}
 
 export const authService = {
   async signUp({ fullName, email, password }: SignUpInput): Promise<SignUpResult> {

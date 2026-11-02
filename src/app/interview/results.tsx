@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, type Href } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -146,7 +146,12 @@ export default function InterviewResultsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.topBar}>
-          <Text style={styles.wordmark}>VOCARA</Text>
+          <PressableScale onPress={() => router.replace("/home")} accessibilityLabel="Back to home">
+            <View style={styles.homeAction}>
+              <Ionicons name="arrow-back" size={20} color={colors.ink} />
+              <Text style={styles.wordmark}>VOCARA</Text>
+            </View>
+          </PressableScale>
           <PressableScale
             onPress={() => setShareVisible(true)}
             accessibilityLabel="Share interview result"
@@ -160,7 +165,7 @@ export default function InterviewResultsScreen() {
 
         <Animated.View entering={FadeInDown.duration(360)} style={styles.intro}>
           <Text style={styles.eyebrow}>Interview complete</Text>
-          <Text style={styles.headline}>You handled that well.</Text>
+          <Text accessibilityRole="header" style={styles.headline}>You handled that well.</Text>
           <Text style={styles.support}>
             {"Here's where you stood out and where your next improvement can come from."}
           </Text>
@@ -306,7 +311,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
+    ...(Platform.OS === "web" ? { width: "100%" as const, maxWidth: 900, alignSelf: "center" as const } : {}),
   },
+  homeAction: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 12 },
   topBar: {
     minHeight: 42,
     flexDirection: "row",
@@ -320,8 +327,8 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   shareIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 20,
     backgroundColor: colors.surface,
     borderWidth: 1,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 import * as Linking from "expo-linking";
 import { router, useLocalSearchParams } from "expo-router";
 
@@ -34,12 +34,14 @@ export default function AuthCallbackScreen() {
   const { session, profile } = useAuth();
   const linkingUrl = Linking.useLinkingURL();
   const params = useLocalSearchParams<CallbackParams>();
+  const [browserCallback] = useState(() => Platform.OS === "web" && typeof window !== "undefined"
+    ? window.location.href : null);
   const handledUrl = useRef<string | null>(null);
   const [state, setState] = useState<CallbackState>({ phase: "loading" });
   const flow = firstParam(params.flow) === "recovery" || firstParam(params.type) === "recovery"
     ? "recovery"
     : "verification";
-  const callbackUrl = callbackUrlFrom(linkingUrl, params);
+  const callbackUrl = callbackUrlFrom(browserCallback ?? linkingUrl, params);
 
   useEffect(() => {
     if (!callbackUrl || handledUrl.current === callbackUrl) return;
@@ -47,6 +49,10 @@ export default function AuthCallbackScreen() {
     let active = true;
     authService.consumeCallback(callbackUrl).then(
       (flow) => {
+        if (Platform.OS === "web" && typeof window !== "undefined") {
+          // Remove credentials from browser history after successful consumption.
+          window.history.replaceState(window.history.state, "", `/auth/callback?flow=${flow}`);
+        }
         if (active) setState({ phase: "success", flow });
       },
       (error) => {
@@ -128,7 +134,12 @@ export default function AuthCallbackScreen() {
 }
 
 function callbackUrlFrom(linkingUrl: string | null, params: CallbackParams) {
-  if (linkingUrl?.includes("/auth/callback")) return linkingUrl;
+  if (linkingUrl?.includes("/auth/callback")) {
+    const parsed = new URL(linkingUrl);
+    const fragment = new URLSearchParams(parsed.hash.replace(/^#/, ""));
+    if (["code", "access_token", "refresh_token", "token_hash", "error", "error_description"]
+      .some(key => parsed.searchParams.has(key) || fragment.has(key))) return linkingUrl;
+  }
 
   const queryParams = Object.fromEntries(
     Object.entries(params).flatMap(([key, value]) => {

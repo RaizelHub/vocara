@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -27,6 +27,7 @@ export function MicrophonePermissionState({
       <Text style={styles.title}>Microphone access needed</Text>
       <Text style={styles.body}>
         Vocara needs microphone access so you can practice spoken interview answers.
+        {Platform.OS === "web" ? " Use the site permissions beside your browser's address bar to allow the microphone, then retry." : ""}
       </Text>
       <PressableScale
         onPress={canAskAgain ? onAllow : onOpenSettings}

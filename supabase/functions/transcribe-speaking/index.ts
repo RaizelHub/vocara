@@ -1,3 +1,4 @@
+import { inspectSpeechWav } from "../_shared/wav.ts";
 import { accountAccessResponse } from "../_shared/accountPrivacy.ts";
 import { fetchGroqJson, ProviderError, usageContext, aiClaimError, type UsageContext } from "../_shared/aiProvider.ts";
 import type { SupabaseContext } from "npm:@supabase/server@1.4.1";
@@ -24,7 +25,7 @@ const ALLOWED_TRANSCRIPTION_MODELS = new Set([
 ]);
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ALLOWED_AUDIO_TYPES = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a"]);
+const ALLOWED_AUDIO_TYPES = new Set(["audio/mp4", "audio/m4a", "audio/x-m4a", "audio/wav"]);
 const ATTEMPT_COLUMNS =
   "id,session_id,user_id,attempt_number,transcript,audio_path,duration_seconds,word_count,speaking_pace,transcription_status,transcription_retryable,transcription_attempt_count,transcription_attempt_id,transcription_started_at,transcription_model,transcription_provider_request_id,audio_mime_type,audio_size_bytes,audio_sha256,audio_generation,audio_attached_at" as const;
 
@@ -387,8 +388,8 @@ function validateAttachedAudio(attempt: AttemptRow, userId: string) {
     pathParts.length !== 3 ||
     pathParts[0] !== userId ||
     pathParts[1] !== attempt.session_id ||
-    !UUID_PATTERN.test(pathParts[2].replace(/\.m4a$/i, "")) ||
-    !pathParts[2].toLowerCase().endsWith(".m4a")
+    !UUID_PATTERN.test(pathParts[2].replace(/\.(m4a|wav)$/i, "")) ||
+    !/\.(m4a|wav)$/i.test(pathParts[2])
   ) {
     throw new FunctionError(403, "invalid_audio_path", "The recording path is invalid.");
   }
@@ -426,7 +427,15 @@ async function inspectDownloadedAudio(audio: Blob, attempt: AttemptRow) {
   }
 
   const bytes = new Uint8Array(await audio.arrayBuffer());
-  const media = inspectM4a(bytes);
+  let media: { durationSeconds: number };
+  try {
+    const wav = mimeType === "audio/wav";
+    const path = attempt.audio_path ?? "";
+    if (wav !== path.toLowerCase().endsWith(".wav")) throw new Error("Container mismatch");
+    media = wav ? inspectSpeechWav(bytes) : inspectM4a(bytes);
+  } catch {
+    throw new FunctionError(422, "invalid_audio", "The recording could not be verified. Record it again.", false);
+  }
   if (media.durationSeconds > 120.5) {
     throw new FunctionError(
       413,

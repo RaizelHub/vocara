@@ -57,12 +57,6 @@ function RootNavigator() {
         <Stack.Screen name="verify-email" />
       </Stack.Protected>
 
-      <Stack.Screen name="account/delete" />
-      <Stack.Screen name="privacy" />
-      <Stack.Screen name="terms" />
-      <Stack.Screen name="auth/callback" options={{ gestureEnabled: false }} />
-      <Stack.Screen name="reset-password" options={{ gestureEnabled: false }} />
-
       <Stack.Protected guard={signedIn && !deletionPending && !setupComplete}>
         <Stack.Screen name="career-setup" />
       </Stack.Protected>
@@ -87,6 +81,11 @@ function RootNavigator() {
         <Stack.Screen name="pro" />
         <Stack.Screen name="usage" />
       </Stack.Protected>
+      <Stack.Screen name="account/delete" />
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="terms" />
+      <Stack.Screen name="auth/callback" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="reset-password" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }
