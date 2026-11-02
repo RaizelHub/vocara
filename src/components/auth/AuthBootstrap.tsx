@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LiveWaveform } from "@/components/interview/LiveWaveform";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { colors } from "@/theme/colors";
+import { WaitNotice } from "@/components/ui/WaitNotice";
 
 export type AuthBootstrapProps = {
   error?: string | null;
@@ -34,6 +35,7 @@ export function AuthBootstrap({ error, onRetry }: AuthBootstrapProps) {
         <Text style={styles.message} accessibilityRole={error ? "alert" : undefined}>
           {error ?? "Restoring your account and preferences."}
         </Text>
+        {!error && <WaitNotice operation="account" />}
       </View>
       {error && onRetry ? (
         <View style={styles.retry}>

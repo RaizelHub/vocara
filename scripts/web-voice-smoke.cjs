@@ -8,6 +8,7 @@ const { chromium } = require(process.env.VOCARA_PLAYWRIGHT_MODULE || 'playwright
 async function main() {
  const recovery=process.env.VOCARA_TEST_RECOVERY==='1';
  const layout=process.env.VOCARA_TEST_LAYOUT==='1';
+ const states=process.env.VOCARA_TEST_STATES==='1';
  const root=path.resolve(process.env.VOCARA_WEB_EXPORT || 'dist/stage-c-web');
  const server=http.createServer((req,res)=>{
   const name=decodeURIComponent(new URL(req.url,'http://localhost').pathname);
@@ -31,13 +32,14 @@ async function main() {
   let answer=null,uploads=0,transcriptions=0,evaluations=0,finalizations=0;
   browser=await chromium.launch({headless:true,channel:'chrome',args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
   const context=await browser.newContext({permissions:['microphone']});
-  await context.addInitScript(auth=>sessionStorage.setItem('sb-vocara-stage-a-auth-token',JSON.stringify(auth)),auth);
+  if(!states)await context.addInitScript(auth=>sessionStorage.setItem('sb-vocara-stage-a-auth-token',JSON.stringify(auth)),auth);
   await context.route('**/*',async route=>{
    const request=route.request(),url=new URL(request.url());
    if(url.origin===origin)return route.continue();
    if(url.origin!==backend)return route.abort();
    let body=null;
    const p=url.pathname;
+   if(states && p.endsWith('/get_interview_result'))await new Promise(resolve=>setTimeout(resolve,11000));
    if(request.method()==='OPTIONS')return route.fulfill({status:200,headers:{'access-control-allow-origin':origin,'access-control-allow-headers':'*','access-control-allow-methods':'GET,POST,OPTIONS'}});
    if(p==='/auth/v1/user')body=user;
    else if(p==='/auth/v1/token')body=auth;
@@ -72,6 +74,25 @@ async function main() {
   });
   const page=await context.newPage();page.setDefaultTimeout(30000);
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  if(states){
+   await page.goto(`${origin}/login`);
+   await page.getByRole('button',{name:'Sign In',exact:true}).click();
+   const email=page.getByLabel('Email address',{exact:true});
+   await page.getByText('Enter a valid email address',{exact:true}).waitFor();
+   assert.equal(await email.getAttribute('aria-invalid'),'true');
+   const description=await email.getAttribute('aria-describedby');assert.ok(description);
+   assert.equal(await page.locator(`[id="${description}"]`).innerText(),'Enter a valid email address');
+   await context.setOffline(true);
+   await page.getByText(/You’re offline\. Keep this page open/).waitFor();
+   await context.setOffline(false);
+   await page.getByText(/You’re offline\. Keep this page open/).waitFor({state:'hidden'});
+   await page.evaluate(auth=>sessionStorage.setItem('sb-vocara-stage-a-auth-token',JSON.stringify(auth)),auth);
+   await page.goto(`${origin}/interview/results?id=${sid}`);
+   await page.getByText('This is taking longer than usual. Your request is still pending.',{exact:true}).waitFor();
+   await page.getByRole('heading',{name:'You handled that well.'}).waitFor();
+   assert.deepEqual(errors,[]);
+   console.log('PASS inline validation association, offline/reconnect notice, delayed request guidance and successful result recovery.');return;
+  }
   if(layout){
    const noOverflow=async(label)=>assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),label+' horizontal overflow');
    for(const width of [320,390,768,1024,1366,1440]){

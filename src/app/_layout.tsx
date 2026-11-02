@@ -1,10 +1,12 @@
 import { useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, usePathname, useGlobalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthBootstrap } from "@/components/auth/AuthBootstrap";
 import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { ConnectionNotice } from "@/components/ui/ConnectionNotice";
+import { recoveryReference } from "@/lib/recoveryReference";
 import { initSentry } from "@/lib/sentry";
 import { AuthProvider, useAuth } from "@/providers/AuthProvider";
 import { SubscriptionProvider } from "@/providers/SubscriptionProvider";
@@ -17,6 +19,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <StatusBar style="dark" />
       <ErrorBoundary>
+        <ConnectionNotice />
         <AuthProvider>
           <SubscriptionProvider>
             <RootNavigator />
@@ -30,6 +33,14 @@ export default function RootLayout() {
 function RootNavigator() {
   const { session, profile, deletionPending, loading, bootstrapError, retryBootstrap } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ id?: string }>();
+  const owner = session?.user.id;
+  useEffect(() => {
+    if (owner && pathname === "/interview/session" && typeof params.id === "string") {
+      void recoveryReference.save(owner, params.id).catch(() => undefined);
+    }
+  }, [owner, pathname, params.id]);
   useEffect(() => { if (deletionPending && !loading) router.replace("/account/delete"); }, [deletionPending, loading, router]);
 
   if (loading || bootstrapError) {

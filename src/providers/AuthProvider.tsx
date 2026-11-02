@@ -18,6 +18,7 @@ import {
   type UserProfileSnapshot,
 } from "@/services/profileService";
 import { resetInterviewSession } from "@/state/session";
+import { recoveryReference } from "@/lib/recoveryReference";
 import type { FocusArea, Profile, UserPreference } from "@/types/database";
 
 type AuthContextValue = {
@@ -254,8 +255,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
+    const owner = sessionRef.current?.user.id;
     try {
       await authService.signOut();
+      if (owner) await recoveryReference.clear(owner).catch(() => undefined);
       resetInterviewSession();
       await applySession(null, false);
     } catch (error) {

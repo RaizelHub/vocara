@@ -2,6 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 
 import { authStyles } from "@/components/auth/authStyles";
 import { colors } from "@/theme/colors";
+import { WaitNotice } from "@/components/ui/WaitNotice";
 
 type AuthButtonProps = {
   label: string;
@@ -21,10 +22,11 @@ export function AuthButton({
   const inactive = loading || disabled;
 
   return (
-    <Pressable
+    <><Pressable
       accessibilityRole="button"
       accessibilityLabel={loading ? loadingLabel ?? label : label}
       accessibilityState={{ busy: loading, disabled: inactive }}
+      aria-busy={loading}
       disabled={inactive}
       onPress={onPress}
       style={({ pressed }) => [
@@ -35,7 +37,7 @@ export function AuthButton({
     >
       {loading ? <ActivityIndicator color="#FFFFFF" size="small" /> : null}
       <Text style={styles.label}>{loading ? loadingLabel ?? label : label}</Text>
-    </Pressable>
+    </Pressable>{loading && <WaitNotice operation={loadingLabel ?? label} />}</>
   );
 }
 

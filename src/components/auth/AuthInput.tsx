@@ -1,4 +1,4 @@
-import { useState, type Ref } from "react";
+import { useId, useState, type Ref } from "react";
 import type {
   KeyboardTypeOptions,
   ReturnKeyTypeOptions,
@@ -67,6 +67,7 @@ export function AuthInput({
   editable = true,
 }: AuthInputProps) {
   const [secure, setSecure] = useState(secureTextEntry);
+  const errorId = useId();
   const focus = useSharedValue(0);
 
   const containerStyle = useAnimatedStyle(() => ({
@@ -121,6 +122,8 @@ export function AuthInput({
           selectionColor={colors.accent}
           accessibilityLabel={label}
           accessibilityHint={error}
+          aria-invalid={!!error}
+          aria-describedby={error ? errorId : undefined}
           accessibilityState={{ disabled: !editable }}
           editable={editable}
         />
@@ -138,7 +141,7 @@ export function AuthInput({
         )}
       </Animated.View>
       {error != null && (
-        <Text accessibilityRole="alert" style={styles.error}>
+        <Text nativeID={errorId} accessibilityRole="alert" style={styles.error}>
           {error}
         </Text>
       )}

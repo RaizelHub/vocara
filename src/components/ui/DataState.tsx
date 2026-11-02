@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { LiveWaveform } from "@/components/interview/LiveWaveform";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
 import { colors } from "@/theme/colors";
+import { WaitNotice } from "./WaitNotice";
 
 export type LoadingStateProps = {
   label: string;
@@ -23,6 +24,7 @@ export function LoadingState({ label }: LoadingStateProps) {
       <Text style={styles.title} accessibilityLiveRegion="polite">
         {label}
       </Text>
+      <WaitNotice operation={label} />
     </View>
   );
 }

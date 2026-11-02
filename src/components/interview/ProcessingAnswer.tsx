@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { LiveWaveform } from "@/components/interview/LiveWaveform";
+import { WaitNotice } from "@/components/ui/WaitNotice";
 
 export function ProcessingAnswer({
   stage,
@@ -38,6 +39,7 @@ export function ProcessingAnswer({
         {label}
       </Text>
       {processing && <Text style={styles.hint}>{hint}</Text>}
+      {processing && <WaitNotice operation={stage} light />}
     </View>
   );
 }
