@@ -2,7 +2,7 @@
   "expo": {
     "name": "Vocara",
     "slug": "vocara",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/vocara-icon.png",
     "scheme": "vocara",
@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.vocara.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/vocara-adaptive-foreground.png",
         "backgroundColor": "#F7F7F3",

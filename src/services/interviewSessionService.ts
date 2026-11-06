@@ -37,8 +37,15 @@ export const interviewSessionService = {
     if (error) throw interviewStartError(error);
   },
 
-  async abandon(sessionId: string) {
+  async abandon(sessionId: string, expectedUserId?: string) {
     assertSupabaseConfigured();
+    if (expectedUserId) {
+      const { data: authData } = await supabase.auth.getSession();
+      const currentUserId = authData.session?.user?.id;
+      if (currentUserId && currentUserId !== expectedUserId) {
+        throw new Error("UNAUTHORIZED_ABANDONMENT");
+      }
+    }
     const { error } = await supabase.rpc("abandon_interview_session", {
       p_session_id: sessionId,
     });

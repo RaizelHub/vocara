@@ -77,7 +77,18 @@ export function planInterviewRecovery(data: InterviewRecovery, now = Date.now())
   if (incomplete === -1) {
     state = { ...state, phase: 'summary' };
     if (data.finalization?.evaluation_status === 'failed' || data.finalization?.evaluation_status === 'processing') {
-      state = { ...state, phase: 'error', failure: { stage: 'finalization', retryable: data.finalization.evaluation_retryable, message: data.finalization.evaluation_retryable ? 'All answers are saved. The summary did not finish. Retry to complete this interview without using more allowance.' : 'All answers are saved, but the summary reached its processing limit. Contact support for help with this interview.' } };
+      state = {
+        ...state,
+        phase: 'error',
+        failure: {
+          stage: 'finalization',
+          retryable: data.finalization.evaluation_retryable,
+          code: data.finalization.evaluation_retryable ? undefined : 'finalization_retry_exhausted',
+          message: data.finalization.evaluation_retryable
+            ? 'All answers are saved. The summary did not finish. Retry to complete this interview without using more allowance.'
+            : 'All answers are saved, but the summary reached its processing limit. Contact support for help with this interview.',
+        },
+      };
     }
   } else if (answer?.audio_path) {
     const retryable = stage === 'transcription' ? answer.transcription_retryable : feedback?.evaluation_retryable ?? true;
@@ -87,4 +98,18 @@ export function planInterviewRecovery(data: InterviewRecovery, now = Date.now())
     state = { ...state, phase: 'error', failure: { stage, retryable: false, code: 'answer_retry_exhausted', message: 'This answer reached its processing safety limit. Saved answers remain available. Contact support for help with this interview.' } };
   }
   return { kind: 'room', state };
+}
+
+export function isInterviewUnrecoverable(data: InterviewRecovery): boolean {
+  if (['completed', 'abandoned'].includes(data.session.status)) return true;
+  try {
+    recoverySession(data);
+  } catch {
+    return true;
+  }
+  const plan = planInterviewRecovery(data);
+  if (plan.kind === 'room' && plan.state.failure && plan.state.failure.retryable === false) {
+    return true;
+  }
+  return false;
 }

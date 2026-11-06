@@ -14,6 +14,7 @@ import Animated, { FadeIn, FadeInDown, FadeOutUp } from "react-native-reanimated
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { InterviewExitModal } from "@/components/interview/InterviewExitModal";
+import { InterviewAbandonModal } from "@/components/interview/InterviewAbandonModal";
 import { AnswerFeedback } from "@/components/interview/AnswerFeedback";
 import { InterviewProgress } from "@/components/interview/InterviewProgress";
 import { InterviewerVoice } from "@/components/interview/InterviewerVoice";
@@ -69,6 +70,7 @@ import {
   type TranscriptionResult,
 } from "@/services/transcriptionService";
 import { getInterviewSession, resetInterviewSession } from "@/state/session";
+import { recoveryReference } from "@/lib/recoveryReference";
 import { colors } from "@/theme/colors";
 import type { InterviewAnswerRecord } from "@/types/database";
 import {
@@ -170,11 +172,16 @@ function finalizationFailureFor(error: unknown): RoomFailure {
 export default function InterviewSessionScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const sessionId = id ?? getInterviewSession()?.id;
+  const { user } = useAuth();
   const [data, setData] = useState<InterviewRecovery | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
   const [ready, setReady] = useState(false);
+  const [abandonVisible, setAbandonVisible] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
+  const [abandonError, setAbandonError] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
     let resumed = false;
@@ -208,22 +215,81 @@ export default function InterviewSessionScreen() {
         if (active) {
           setReady(false);
           setWaiting(null);
-          setError(e instanceof Error ? e.message : 'Could not restore your interview. Check your connection and retry.');
+          const msg = e instanceof Error ? e.message : 'Could not restore your interview. Check your connection and retry.';
+          setError(msg);
+          if (msg.includes('ended') && user?.id) {
+            void recoveryReference.clear(user.id).catch(() => undefined);
+            resetInterviewSession();
+          }
         }
       }
     };
     void load();
     return () => { active = false; clearTimeout(timer); };
-  }, [sessionId, retry]);
+  }, [sessionId, retry, user?.id]);
+
+  const targetSessionId = sessionId || data?.session.id;
+
+  const handleAbandonFromScreen = useCallback(async () => {
+    if (!targetSessionId || abandoning) return;
+    setAbandoning(true);
+    setAbandonError(null);
+    try {
+      await interviewSessionService.abandon(targetSessionId, user?.id);
+      if (user?.id) {
+        await recoveryReference.clear(user.id).catch(() => undefined);
+      }
+      resetInterviewSession();
+      setAbandonVisible(false);
+      router.replace('/home');
+    } catch (e) {
+      setAbandonError(
+        e instanceof Error
+          ? e.message
+          : 'Could not end interview. Check your connection and retry.'
+      );
+    } finally {
+      setAbandoning(false);
+    }
+  }, [abandoning, targetSessionId, user?.id]);
+
   const plan = data ? planInterviewRecovery(data) : null;
   if (ready && data && (!sessionId || data.session.id === sessionId) && plan?.kind === 'room') {
     return <InterviewRoom key={data.session.id} session={recoverySession(data)} initialState={plan.state} />;
   }
-  return <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.background }}>
-    {error ? <ErrorState title="Resume interview" message={error} onRetry={() => { setError(null); setRetry(n => n + 1); }} />
-      : <LoadingState label={waiting ?? 'Restoring saved interview…'} />}
-    <PrimaryButton label="Back to home" onPress={() => router.replace('/home')} />
-  </View>;
+  return (
+    <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: colors.background }}>
+      {error ? (
+        <ErrorState title="Resume interview" message={error} onRetry={() => { setError(null); setRetry(n => n + 1); }} />
+      ) : (
+        <LoadingState label={waiting ?? 'Restoring saved interview…'} />
+      )}
+      <View style={{ marginTop: 16, gap: 12 }}>
+        <PrimaryButton label="Back to home" onPress={() => router.replace('/home')} />
+        {targetSessionId && error && (
+          <PressableScale
+            onPress={() => { setAbandonError(null); setAbandonVisible(true); }}
+            accessibilityLabel="Discard incomplete session"
+          >
+            <Text style={{ color: '#E05D52', fontSize: 14, fontWeight: '700', textAlign: 'center', paddingVertical: 8 }}>
+              Discard incomplete session
+            </Text>
+          </PressableScale>
+        )}
+      </View>
+      <InterviewAbandonModal
+        visible={abandonVisible}
+        title="Discard incomplete session?"
+        description="This session could not be restored. Discarding will end the session so you can start a fresh interview."
+        confirmLabel="Discard session"
+        cancelLabel="Keep session"
+        abandoning={abandoning}
+        error={abandonError}
+        onClose={() => { if (!abandoning) setAbandonVisible(false); }}
+        onConfirm={() => void handleAbandonFromScreen()}
+      />
+    </View>
+  );
 }
 
 function InterviewRoom({ session, initialState }: { session: InterviewSession; initialState: RoomState }) {
@@ -231,6 +297,9 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
   const { user, signOut } = useAuth();
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const [exitVisible, setExitVisible] = useState(false);
+  const [abandonVisible, setAbandonVisible] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
+  const [abandonError, setAbandonError] = useState<string | null>(null);
   const operationInFlight = useRef(false);
   const screenGeneration = useRef(0);
   const uploadAbortController = useRef<AbortController | null>(null);
@@ -415,6 +484,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     uploadAbortController.current = uploadController;
     let answer = state.answer;
     let audioPath = state.audioPath;
+    let transcript: TranscriptionResult | null = state.transcript;
     let attached = false;
     let evaluating = false;
 
@@ -472,7 +542,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         void audioService.deleteAnswerAudio(previousRemotePath).catch(() => undefined);
       }
 
-      const transcript = await transcriptionService.transcribe(answer.id);
+      transcript = await transcriptionService.transcribe(answer.id);
       if (screenGeneration.current !== expectedScreenGeneration) return;
       evaluating = true;
       dispatch({
@@ -496,6 +566,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         values: {
           answer,
           audioPath,
+          transcript: transcript ?? state.transcript,
           failure: attached
             ? evaluating
               ? evaluationFailureFor(error)
@@ -551,6 +622,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         type: "transition",
         phase: "error",
         values: {
+          transcript: transcript ?? state.transcript,
           failure: transcript
             ? evaluationFailureFor(error)
             : {
@@ -566,32 +638,51 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } finally {
       operationInFlight.current = false;
     }
-  }, [state.answer]);
+  }, [state.answer, state.transcript]);
 
   const retryEvaluation = useCallback(async () => {
-    if (operationInFlight.current || !state.answer || !state.transcript) return;
+    if (operationInFlight.current || !state.answer) return;
+    const resolvedTranscript = state.transcript ?? (state.answer.transcript ? {
+      answerId: state.answer.id,
+      transcript: state.answer.transcript,
+      durationSeconds: state.answer.duration_seconds ?? 0,
+      wordCount: state.answer.word_count ?? 0,
+      speakingPace: Number(state.answer.speaking_pace ?? 0),
+    } : null);
+
+    if (!resolvedTranscript) {
+      return retryTranscription();
+    }
+
     operationInFlight.current = true;
     const expectedScreenGeneration = screenGeneration.current;
-    dispatch({ type: "transition", phase: "evaluating", values: { failure: null } });
+    dispatch({
+      type: "transition",
+      phase: "evaluating",
+      values: { transcript: resolvedTranscript, failure: null },
+    });
     try {
       const evaluation = await evaluationService.evaluateAnswer(state.answer.id);
       if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "transcribed",
-        values: { evaluation, failure: null },
+        values: { transcript: resolvedTranscript, evaluation, failure: null },
       });
     } catch (error) {
       if (screenGeneration.current !== expectedScreenGeneration) return;
       dispatch({
         type: "transition",
         phase: "error",
-        values: { failure: evaluationFailureFor(error) },
+        values: {
+          transcript: resolvedTranscript,
+          failure: evaluationFailureFor(error),
+        },
       });
     } finally {
       operationInFlight.current = false;
     }
-  }, [state.answer, state.transcript]);
+  }, [retryTranscription, state.answer, state.transcript]);
 
   const handleNext = useCallback(async () => {
     if (!session || operationInFlight.current) return;
@@ -605,6 +696,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         try {
           const result = await finalizationService.finalizeInterview(session.id);
           if (screenGeneration.current !== expectedScreenGeneration) return;
+          resetInterviewSession();
           router.replace({
             pathname: "/interview/results",
             params: { id: result.sessionId },
@@ -613,6 +705,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         } catch (error) {
           if (screenGeneration.current !== expectedScreenGeneration) return;
           if (error instanceof FinalizationError && error.code === "already_finalized") {
+            resetInterviewSession();
             router.replace({
               pathname: "/interview/results",
               params: { id: session.id },
@@ -658,6 +751,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     try {
       const result = await finalizationService.finalizeInterview(session.id);
       if (screenGeneration.current !== expectedScreenGeneration) return;
+      resetInterviewSession();
       router.replace({
         pathname: "/interview/results",
         params: { id: result.sessionId },
@@ -665,6 +759,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } catch (error) {
       if (screenGeneration.current !== expectedScreenGeneration) return;
       if (error instanceof FinalizationError && error.code === "already_finalized") {
+        resetInterviewSession();
         router.replace({
           pathname: "/interview/results",
           params: { id: session.id },
@@ -688,6 +783,29 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     resetInterviewSession();
     router.replace("/home");
   }, []);
+
+  const handleAbandon = useCallback(async () => {
+    if (!session?.id || abandoning) return;
+    setAbandoning(true);
+    setAbandonError(null);
+    try {
+      await interviewSessionService.abandon(session.id, user?.id);
+      if (user?.id) {
+        await recoveryReference.clear(user.id).catch(() => undefined);
+      }
+      resetInterviewSession();
+      setAbandonVisible(false);
+      router.replace("/home");
+    } catch (e) {
+      setAbandonError(
+        e instanceof Error
+          ? e.message
+          : "Could not end interview. Check your connection and retry."
+      );
+    } finally {
+      setAbandoning(false);
+    }
+  }, [abandoning, session?.id, user?.id]);
 
   const handleReauthenticate = useCallback(() => {
     screenGeneration.current += 1;
@@ -863,7 +981,11 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
             onPrimary={
               state.failure.requiresAuth
                 ? handleReauthenticate
-                : (state.failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? ""))
+                : (state.failure.code === "answer_retry_exhausted" ||
+                   state.failure.code === "finalization_retry_exhausted" ||
+                   (state.failure.stage === "finalization" && state.failure.retryable === false))
+                  ? () => { setAbandonError(null); setAbandonVisible(true); }
+                : SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? "")
                   ? handleLeave
                 : state.failure.stage === "upload"
                 ? state.failure.retryable === false
@@ -880,16 +1002,26 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
                         ? () => void handleRecordAgain()
                         : () => void retryEvaluation()
                     : state.failure.stage === "finalization"
-                      ? state.failure.code === "daily_limit_reached" ||
-                        state.failure.retryable === false
+                      ? state.failure.code === "daily_limit_reached"
                         ? handleLeave
                         : () => void retryFinalization()
                       : state.failure.stage === "completion"
                         ? () => void handleNext()
                         : () => void handleRecordAgain()
             }
+            onSecondary={
+              (state.failure.code === "answer_retry_exhausted" ||
+               state.failure.code === "finalization_retry_exhausted" ||
+               (state.failure.stage === "finalization" && state.failure.retryable === false))
+                ? handleLeave
+                : undefined
+            }
+            secondaryLabel="Back to home"
             onRecordAgain={
-              (state.failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? "")) ||
+              (state.failure.code === "answer_retry_exhausted" ||
+               state.failure.code === "finalization_retry_exhausted" ||
+               (state.failure.stage === "finalization" && state.failure.retryable === false) ||
+               SERVICE_CONFIGURATION_ERRORS.has(state.failure.code ?? "")) ||
               state.failure.stage === "completion" ||
               state.failure.stage === "finalization" ||
               state.failure.code === "daily_limit_reached" ||
@@ -901,13 +1033,13 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
           />
         )}
 
-        {state.phase === "summary" && state.transcript && (
+        {state.phase === "summary" && (state.transcript || state.answer?.transcript) && (
           <View>
             <TranscriptPreview
-              transcript={state.transcript.transcript}
-              durationSeconds={state.transcript.durationSeconds}
-              wordCount={state.transcript.wordCount}
-              speakingPace={state.transcript.speakingPace}
+              transcript={(state.transcript?.transcript ?? state.answer?.transcript) || ""}
+              durationSeconds={state.transcript?.durationSeconds ?? state.answer?.duration_seconds ?? 0}
+              wordCount={state.transcript?.wordCount ?? state.answer?.word_count ?? 0}
+              speakingPace={state.transcript?.speakingPace ?? Number(state.answer?.speaking_pace ?? 0)}
               isLast={isLast}
               onNext={() => void handleNext()}
               onRecordAgain={() => void handleRecordAgain()}
@@ -923,6 +1055,20 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         onClose={() => setExitVisible(false)}
         onLeave={handleLeave}
       />
+
+      <InterviewAbandonModal
+        visible={abandonVisible}
+        title="End this interview?"
+        description="Your completed answers and feedback will remain saved in your practice history. This incomplete interview will be ended and cannot be resumed."
+        confirmLabel="End interview"
+        cancelLabel="Keep session"
+        abandoning={abandoning}
+        error={abandonError}
+        onClose={() => {
+          if (!abandoning) setAbandonVisible(false);
+        }}
+        onConfirm={() => void handleAbandon()}
+      />
     </View>
   );
 }
@@ -931,16 +1077,25 @@ function AnswerErrorState({
   failure,
   onPrimary,
   onRecordAgain,
+  onSecondary,
+  secondaryLabel = "Back to home",
 }: {
   failure: RoomFailure;
   onPrimary: () => void;
   onRecordAgain?: () => void;
+  onSecondary?: () => void;
+  secondaryLabel?: string;
 }) {
   const upload = failure.stage === "upload";
   const transcription = failure.stage === "transcription";
   const evaluation = failure.stage === "evaluation";
   const finalization = failure.stage === "finalization";
   const dailyLimit = failure.code === "daily_limit_reached";
+  const isFatalExhausted =
+    failure.code === "answer_retry_exhausted" ||
+    failure.code === "finalization_retry_exhausted" ||
+    (finalization && failure.retryable === false);
+
   const title = failure.requiresAuth
     ? "Sign in again"
     : upload
@@ -950,15 +1105,22 @@ function AnswerErrorState({
       : evaluation
         ? dailyLimit
           ? "Daily limit reached"
-          : "Feedback unavailable"
+          : isFatalExhausted
+            ? "Evaluation limit reached"
+            : "Feedback unavailable"
         : finalization
-          ? "Couldn't finish interview"
+          ? isFatalExhausted
+            ? "Summary limit reached"
+            : "Couldn't finish interview"
           : failure.stage === "completion"
             ? "Couldn't finish interview"
             : "Recorder unavailable";
+
   const primaryLabel = failure.requiresAuth
     ? "Return to sign in"
-    : (failure.code === "answer_retry_exhausted" || SERVICE_CONFIGURATION_ERRORS.has(failure.code ?? ""))
+    : isFatalExhausted
+      ? "End interview"
+    : SERVICE_CONFIGURATION_ERRORS.has(failure.code ?? "")
       ? "Back to home"
     : upload
     ? failure.retryable === false
@@ -975,7 +1137,7 @@ function AnswerErrorState({
             ? "Record again"
             : "Retry feedback"
         : finalization
-          ? dailyLimit || failure.retryable === false
+          ? dailyLimit
             ? "Back to home"
             : "Try again"
           : failure.stage === "completion"
@@ -990,8 +1152,13 @@ function AnswerErrorState({
       <Text style={styles.errorTitle}>{title}</Text>
       <Text style={styles.errorMessage}>{failure.message}</Text>
       <PressableScale onPress={onPrimary} accessibilityLabel={primaryLabel} style={styles.retryWrap}>
-        <Text style={styles.retryLabel}>{primaryLabel}</Text>
+        <Text style={isFatalExhausted ? styles.abandonPrimaryLabel : styles.retryLabel}>{primaryLabel}</Text>
       </PressableScale>
+      {onSecondary && (
+        <PressableScale onPress={onSecondary} accessibilityLabel={secondaryLabel} style={styles.secondaryActionWrap}>
+          <Text style={styles.secondaryActionLabel}>{secondaryLabel}</Text>
+        </PressableScale>
+      )}
       {onRecordAgain && (
         <PressableScale onPress={onRecordAgain} accessibilityLabel="Record again" collapsed>
           <Text style={styles.recordAgainLabel}>Record again</Text>
@@ -1131,6 +1298,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
     includeFontPadding: false,
+  },
+  abandonPrimaryLabel: {
+    height: 52,
+    lineHeight: 52,
+    borderRadius: 26,
+    backgroundColor: "rgba(224, 93, 82, 0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(224, 93, 82, 0.4)",
+    color: "#E05D52",
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
+  secondaryActionWrap: {
+    alignSelf: "stretch",
+    marginTop: 10,
+  },
+  secondaryActionLabel: {
+    color: "#B9B8B0",
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    paddingVertical: 6,
   },
   recordAgainLabel: {
     color: "#B9B8B0",

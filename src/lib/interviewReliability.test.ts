@@ -1,7 +1,30 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('expo-crypto', () => ({ randomUUID: () => 'mock-uuid' }));
+
+const { rpcMock, getSessionMock } = vi.hoisted(() => ({
+  rpcMock: vi.fn(),
+  getSessionMock: vi.fn().mockResolvedValue({
+    data: { session: { user: { id: '22222222-2222-4222-8222-222222222222' } } },
+    error: null,
+  }),
+}));
+
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    rpc: rpcMock,
+    auth: { getSession: getSessionMock },
+  },
+  assertSupabaseConfigured: vi.fn(),
+}));
+
 import { createInterviewStarter, runInterviewInitialization } from './interviewStarter';
 import { interviewStartError } from './interviewErrors';
-import { planInterviewRecovery, recoverySession, type InterviewRecovery } from './interviewRecovery';
+import { isInterviewUnrecoverable, planInterviewRecovery, recoverySession, type InterviewRecovery } from './interviewRecovery';
+import { createRecoveryReference } from './interviewRecoveryReference';
+import { getInterviewSession, resetInterviewSession, startInterviewSession } from '../state/session';
+import { canRetryEvaluation } from '../services/evaluationService';
+import { interviewSessionService } from '../services/interviewSessionService';
 
 function saved(): InterviewRecovery {
   return {
@@ -124,5 +147,261 @@ describe('server-authoritative recovery', () => {
   it('rejects incomplete saved sessions', () => {
     const data = saved(); data.questions.pop();
     expect(() => planInterviewRecovery(data)).toThrow('Incomplete saved interview');
+  });
+  it('restores transcript attributes from answer record when evaluation is pending or failed', () => {
+    const data = saved();
+    data.questions[0].answer = {
+      id: 'a0',
+      audio_path: 'private/audio.m4a',
+      audio_generation: 1,
+      transcription_status: 'completed',
+      transcript: 'Detailed interview answer',
+      duration_seconds: 45,
+      word_count: 50,
+      speaking_pace: 120,
+    } as any;
+    data.questions[0].feedback = {
+      evaluation_status: 'failed',
+      evaluation_retryable: true,
+      source_audio_generation: 1,
+      evaluation_version: 'v1',
+      evaluation_model: 'mock',
+    } as any;
+    const plan = planInterviewRecovery(data);
+    expect(plan.kind).toBe('room');
+    if (plan.kind === 'room') {
+      expect(plan.state.transcript).toEqual({
+        answerId: 'a0',
+        transcript: 'Detailed interview answer',
+        durationSeconds: 45,
+        wordCount: 50,
+        speakingPace: 120,
+      });
+      expect(plan.state.failure?.stage).toBe('evaluation');
+      expect(plan.state.failure?.retryable).toBe(true);
+    }
+  });
+});
+
+describe('session lifecycle isolation', () => {
+  it('resets in-memory current session to prevent stale sessions in subsequent attempts', () => {
+    resetInterviewSession();
+    expect(getInterviewSession()).toBeNull();
+
+    const session = startInterviewSession({
+      role: 'Engineer',
+      type: 'standard',
+      difficulty: 'intermediate',
+      interviewerStyle: 'balanced',
+      length: 'quick',
+      totalQuestions: 1,
+      questions: ['Sample question'],
+      questionIds: ['q1'],
+    });
+    expect(getInterviewSession()?.id).toBe(session.id);
+
+    resetInterviewSession();
+    expect(getInterviewSession()).toBeNull();
+  });
+});
+
+describe('interview recovery and abandonment regression (10 scenarios)', () => {
+  const userId = '22222222-2222-4222-8222-222222222222';
+  const sessionId = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSessionMock.mockResolvedValue({
+      data: { session: { user: { id: userId } } },
+      error: null,
+    });
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    resetInterviewSession();
+  });
+
+  it('1. Recoverable interview resumes normally', () => {
+    const data = saved();
+    expect(isInterviewUnrecoverable(data)).toBe(false);
+    const plan = planInterviewRecovery(data);
+    expect(plan.kind).toBe('room');
+    if (plan.kind === 'room') {
+      expect(plan.state.index).toBe(0);
+      expect(plan.state.phase).toBe('question');
+      expect(plan.state.failure).toBeNull();
+    }
+  });
+
+  it('2. Retry-exhausted interview displays an appropriate error', () => {
+    const data = saved();
+    data.questions[0].retryExhausted = true;
+    expect(isInterviewUnrecoverable(data)).toBe(true);
+
+    const plan = planInterviewRecovery(data);
+    expect(plan.kind).toBe('room');
+    if (plan.kind === 'room') {
+      expect(plan.state.phase).toBe('error');
+      expect(plan.state.failure).toMatchObject({
+        code: 'answer_retry_exhausted',
+        retryable: false,
+      });
+      expect(plan.state.failure?.message).toContain('processing safety limit');
+      expect(plan.state.failure?.message).toContain('Saved answers remain available');
+    }
+
+    const finalData = saved();
+    completedAnswer(finalData, 0);
+    completedAnswer(finalData, 1);
+    finalData.finalization = {
+      evaluation_status: 'failed',
+      evaluation_retryable: false,
+    } as any;
+    expect(isInterviewUnrecoverable(finalData)).toBe(true);
+    const finalPlan = planInterviewRecovery(finalData);
+    expect(finalPlan.kind).toBe('room');
+    if (finalPlan.kind === 'room') {
+      expect(finalPlan.state.phase).toBe('error');
+      expect(finalPlan.state.failure).toMatchObject({
+        stage: 'finalization',
+        code: 'finalization_retry_exhausted',
+        retryable: false,
+      });
+    }
+  });
+
+  it('3 & 4. User confirms abandonment and backend session status updates correctly', async () => {
+    rpcMock.mockResolvedValueOnce({
+      data: { id: sessionId, status: 'abandoned' },
+      error: null,
+    });
+
+    await interviewSessionService.abandon(sessionId, userId);
+    expect(rpcMock).toHaveBeenCalledWith('abandon_interview_session', {
+      p_session_id: sessionId,
+    });
+  });
+
+  it('5. Local recovery references are cleared after successful abandonment', async () => {
+    const store = new Map<string, string>();
+    const ref = createRecoveryReference({
+      getItem: async k => store.get(k) ?? null,
+      setItem: async (k, v) => { store.set(k, v); },
+      removeItem: async k => { store.delete(k); },
+    });
+
+    await ref.save(userId, sessionId);
+    expect(await ref.read(userId)).toBe(sessionId);
+
+    rpcMock.mockResolvedValueOnce({ data: { id: sessionId, status: 'abandoned' }, error: null });
+    await interviewSessionService.abandon(sessionId, userId);
+    await ref.clear(userId);
+
+    expect(await ref.read(userId)).toBeNull();
+  });
+
+  it('6. Home no longer prompts the abandoned interview', () => {
+    const data = saved();
+    data.session.status = 'abandoned';
+
+    const isResumable = (d: InterviewRecovery | null) =>
+      Boolean(d?.session && !['completed', 'abandoned'].includes(d.session.status));
+
+    expect(isResumable(data)).toBe(false);
+    expect(isInterviewUnrecoverable(data)).toBe(true);
+    expect(() => planInterviewRecovery(data)).toThrow('This interview was ended. Start a new interview.');
+  });
+
+  it('7. A new interview starts with fresh state', () => {
+    resetInterviewSession();
+    expect(getInterviewSession()).toBeNull();
+
+    const newSession = startInterviewSession({
+      role: 'Frontend Engineer',
+      type: 'standard',
+      difficulty: 'intermediate',
+      interviewerStyle: 'supportive',
+      length: 'quick',
+      totalQuestions: 1,
+      questions: ['Tell me about React hooks.'],
+      questionIds: ['q-new-1'],
+    });
+
+    expect(newSession.id).toBeDefined();
+    expect(getInterviewSession()?.id).toBe(newSession.id);
+    expect(getInterviewSession()?.role).toBe('Frontend Engineer');
+
+    resetInterviewSession();
+    expect(getInterviewSession()).toBeNull();
+  });
+
+  it('8. Failed abandonment does not falsely clear important data', async () => {
+    const store = new Map<string, string>();
+    const ref = createRecoveryReference({
+      getItem: async k => store.get(k) ?? null,
+      setItem: async (k, v) => { store.set(k, v); },
+      removeItem: async k => { store.delete(k); },
+    });
+
+    await ref.save(userId, sessionId);
+    startInterviewSession({
+      role: 'Staff Engineer',
+      type: 'standard',
+      difficulty: 'advanced',
+      interviewerStyle: 'challenging',
+      length: 'quick',
+      totalQuestions: 1,
+      questions: ['System design question'],
+      questionIds: ['q1'],
+    });
+
+    rpcMock.mockResolvedValueOnce({
+      error: { message: 'Network connection lost' },
+    });
+
+    let failed = false;
+    try {
+      await interviewSessionService.abandon(sessionId, userId);
+      await ref.clear(userId);
+      resetInterviewSession();
+    } catch {
+      failed = true;
+    }
+
+    expect(failed).toBe(true);
+    expect(await ref.read(userId)).toBe(sessionId);
+    expect(getInterviewSession()).not.toBeNull();
+    expect(getInterviewSession()?.role).toBe('Staff Engineer');
+  });
+
+  it('9. Unauthorized abandonment is rejected', async () => {
+    getSessionMock.mockResolvedValueOnce({
+      data: { session: { user: { id: 'attacker-uuid' } } },
+      error: null,
+    });
+
+    await expect(
+      interviewSessionService.abandon(sessionId, 'victim-uuid')
+    ).rejects.toThrow('UNAUTHORIZED_ABANDONMENT');
+
+    expect(rpcMock).not.toHaveBeenCalled();
+  });
+
+  it('10. Previously implemented evaluation retry behavior remains functional', () => {
+    const data = saved();
+    completedAnswer(data, 0);
+    Object.assign(data.questions[0].feedback!, {
+      evaluation_status: 'failed',
+      evaluation_retryable: true,
+    });
+
+    const plan = planInterviewRecovery(data);
+    expect(plan.kind).toBe('room');
+    if (plan.kind === 'room') {
+      expect(plan.state.failure?.stage).toBe('evaluation');
+      expect(plan.state.failure?.retryable).toBe(true);
+      expect(plan.state.transcript?.transcript).toBe('A saved answer');
+    }
+
+    expect(canRetryEvaluation(new Error('Transient gateway timeout'))).toBe(true);
+    expect(isInterviewUnrecoverable(data)).toBe(false);
   });
 });

@@ -27,7 +27,8 @@ export function ResumeInterview() {
       }
       return interviewSessionService.recover();
     })().then(data => {
-      if (active) { setSessionId(data?.session.id ?? null); setResolvedOwner(user.id); setError(false); }
+      const isResumable = data?.session && !['completed', 'abandoned'].includes(data.session.status);
+      if (active) { setSessionId(isResumable ? data.session.id : null); setResolvedOwner(user.id); setError(false); }
     }).catch(() => { if (active) setError(true); });
     return () => { active = false; };
   }, [retry, user]);
