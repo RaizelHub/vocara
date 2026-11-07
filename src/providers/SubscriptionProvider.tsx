@@ -15,6 +15,7 @@ import type {
   PurchasesPackage,
 } from "react-native-purchases";
 
+import { useAuth } from "@/providers/AuthProvider";
 import {
   addCustomerInfoListener,
   getActiveProPackage,
@@ -27,8 +28,8 @@ import {
   openManageSubscription,
   presentPaywallIfNeeded,
   purchasePackage,
-  REVENUECAT_ENTITLEMENTS,
   restorePurchases as rcRestorePurchases,
+  REVENUECAT_ENTITLEMENTS,
   type PaywallPresentResult,
 } from "@/services/revenueCatService";
 import {
@@ -37,7 +38,6 @@ import {
 } from "@/services/subscriptionService";
 import { fetchUsageSummary } from "@/services/usageService";
 import type { FeatureUsageSummary, UserSubscription } from "@/types/database";
-import { useAuth } from "@/providers/AuthProvider";
 
 export type PlanKey = "free" | "pro";
 
@@ -206,7 +206,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (info && userIdRef.current && hasProEntitlement(info)) {
         void syncSubscriptionToServer()
           .then(() => refresh())
-          .catch(() => {});
+          .catch(() => { });
       }
     });
   }, [refresh]);
@@ -229,7 +229,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       try {
         const info = await purchasePackage(pkg);
         setCustomerInfo(info);
-        await syncSubscriptionToServer().catch(() => {});
+        await syncSubscriptionToServer().catch(() => { });
         await refresh();
         const proActive = hasProEntitlement(info);
         return { status: proActive ? "purchased" : "pending" };
@@ -280,7 +280,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     try {
       const info = await rcRestorePurchases();
       setCustomerInfo(info);
-      await syncSubscriptionToServer().catch(() => {});
+      await syncSubscriptionToServer().catch(() => { });
       await refresh();
       const proActive = hasProEntitlement(info);
       return { status: proActive ? "restored" : "cancelled" };
@@ -321,7 +321,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       result.status === "restored" ||
       result.status === "error"
     ) {
-      await refresh().catch(() => {});
+      await refresh().catch(() => { });
     }
     return result;
   }, [refresh]);

@@ -29,7 +29,7 @@ import { TranscriptPreview } from "@/components/interview/TranscriptPreview";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { ErrorState, LoadingState } from "@/components/ui/DataState";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { planInterviewRecovery, recoverySession, type InterviewRecovery } from "@/lib/interviewRecovery";
+import { isInterviewUnrecoverable, planInterviewRecovery, recoverySession, type InterviewRecovery } from "@/lib/interviewRecovery";
 import {
   getRecorderErrorMessage,
   MicrophonePermissionError,
@@ -196,7 +196,7 @@ export default function InterviewSessionScreen() {
           router.replace({ pathname: '/interview/results', params: { id: saved.session.id } });
           return;
         }
-        if (!resumed) {
+        if (!resumed && !isInterviewUnrecoverable(saved)) {
           await interviewSessionService.resume(saved.session.id);
           resumed = true;
         }
