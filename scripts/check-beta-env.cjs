@@ -1,4 +1,6 @@
 const { Buffer } = require('node:buffer');
+const fs = require('node:fs');
+const path = require('node:path');
 
 function checkBetaEnvironment(env) {
   const errors = [];
@@ -21,11 +23,55 @@ function checkBetaEnvironment(env) {
   return errors;
 }
 
-module.exports = { checkBetaEnvironment };
+function checkAndroidPermissions(appConfig, manifestContent) {
+  const errors = [];
+  const blocked = appConfig?.expo?.android?.blockedPermissions || [];
+  const permissions = appConfig?.expo?.android?.permissions || [];
+
+  if (!blocked.includes('android.permission.SYSTEM_ALERT_WINDOW')) {
+    errors.push('SYSTEM_ALERT_WINDOW must be excluded via android.blockedPermissions in app.json.');
+  }
+  if (permissions.includes('android.permission.SYSTEM_ALERT_WINDOW')) {
+    errors.push('SYSTEM_ALERT_WINDOW must not be declared in android.permissions in app.json.');
+  }
+  if (!permissions.includes('android.permission.RECORD_AUDIO')) {
+    errors.push('RECORD_AUDIO must be preserved in android.permissions in app.json.');
+  }
+
+  if (manifestContent) {
+    const alertWindowRegex = /<uses-permission[^>]*android:name=["']android\.permission\.SYSTEM_ALERT_WINDOW["'][^>]*>/i;
+    const match = manifestContent.match(alertWindowRegex);
+    if (match && !match[0].includes('tools:node="remove"') && !match[0].includes("tools:node='remove'")) {
+      errors.push('android/app/src/main/AndroidManifest.xml must not declare SYSTEM_ALERT_WINDOW without tools:node="remove".');
+    }
+    if (!manifestContent.includes('android.permission.RECORD_AUDIO')) {
+      errors.push('android/app/src/main/AndroidManifest.xml must preserve RECORD_AUDIO.');
+    }
+  }
+
+  return errors;
+}
+
+module.exports = { checkBetaEnvironment, checkAndroidPermissions };
+
 if (require.main === module && (process.argv.includes('--check') || process.env.EAS_BUILD_PROFILE === 'preview')) {
   // Read values already supplied by EAS/the caller. Never print their contents.
   const errors = checkBetaEnvironment(process.env);
+
+  try {
+    const rootDir = path.resolve(__dirname, '..');
+    const appJsonPath = path.join(rootDir, 'app.json');
+    if (fs.existsSync(appJsonPath)) {
+      const appConfig = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+      const manifestPath = path.join(rootDir, 'android', 'app', 'src', 'main', 'AndroidManifest.xml');
+      const manifestContent = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf8') : null;
+      errors.push(...checkAndroidPermissions(appConfig, manifestContent));
+    }
+  } catch (err) {
+    errors.push('Failed to inspect Android configuration: ' + (err instanceof Error ? err.message : String(err)));
+  }
+
   for (const error of errors) console.error(error);
   if (errors.length) process.exitCode = 1;
-  else console.log('Beta public environment checks passed (deployment is not verified).');
+  else console.log('Beta public environment and Android permission checks passed (deployment is not verified).');
 }
