@@ -117,7 +117,12 @@ export function useAnswerRecorder() {
     const expectedGeneration = generation.current;
     return enqueue(async () => {
       ensureCurrent(expectedGeneration, false);
-      const statusBeforeStop = audioRecorder.getStatus();
+      let statusBeforeStop;
+      try {
+        statusBeforeStop = audioRecorder.getStatus();
+      } catch {
+        statusBeforeStop = { durationMillis: 0, isRecording: false, canRecord: false, url: null };
+      }
       const uriBeforeStop = activeUri.current ?? audioRecorder.uri ?? statusBeforeStop.url;
       const elapsedMillis = recordingStartedAt.current
         ? Date.now() - recordingStartedAt.current
@@ -138,7 +143,12 @@ export function useAnswerRecorder() {
       }
       ensureCurrent(expectedGeneration, false);
 
-      const status = audioRecorder.getStatus();
+      let status;
+      try {
+        status = audioRecorder.getStatus();
+      } catch {
+        status = { durationMillis: maxObservedDurationMillis.current, url: uriBeforeStop };
+      }
       const uri = uriBeforeStop ?? audioRecorder.uri ?? status.url;
       if (!uri) throw new Error("The recorder did not create an audio file.");
 
@@ -151,7 +161,7 @@ export function useAnswerRecorder() {
         MAX_RECORDING_SECONDS * 1000,
         Math.max(
           maxObservedDurationMillis.current,
-          status.durationMillis,
+          status.durationMillis ?? 0,
           audioRecorder.currentTime * 1000,
         ),
       );
@@ -168,7 +178,8 @@ export function useAnswerRecorder() {
       applyRecording(result);
       await setPlaybackAudioMode();
       return result;
-    }).catch((recordingError) => {
+    }).catch(async (recordingError) => {
+      await setPlaybackAudioMode().catch(() => undefined);
       if (!(recordingError instanceof RecorderOperationCancelledError) && mounted.current) {
         setError(getRecorderErrorMessage(recordingError));
       }
@@ -179,26 +190,26 @@ export function useAnswerRecorder() {
   const discardRecording = useCallback(() => {
     const expectedGeneration = ++generation.current;
     return enqueue(async () => {
-      if (!mounted.current) return;
-
       const uri = recordingRef.current?.uri ?? activeUri.current;
       try {
-        if (audioRecorder.isRecording || audioRecorder.getStatus().canRecord) {
+        const status = audioRecorder.getStatus();
+        if (audioRecorder.isRecording || status.canRecord || status.isRecording) {
           await audioRecorder.stop();
         }
       } catch {
         // stop() also resets a prepared Android recorder when start failed.
+      } finally {
+        deleteLocalFile(uri);
+        activeUri.current = null;
+        observedRecording.current = false;
+        maxObservedDurationMillis.current = 0;
+        recordingStartedAt.current = null;
+        await setPlaybackAudioMode().catch(() => undefined);
       }
 
       if (!mounted.current || generation.current !== expectedGeneration) return;
-      deleteLocalFile(uri);
-      activeUri.current = null;
-      observedRecording.current = false;
-      maxObservedDurationMillis.current = 0;
-      recordingStartedAt.current = null;
       applyRecording(null);
       setError(null);
-      await setPlaybackAudioMode();
     });
   }, [applyRecording, audioRecorder, enqueue]);
 
@@ -212,10 +223,19 @@ export function useAnswerRecorder() {
         throw new Error("Voice recording is currently available on iOS and Android.");
       }
 
+      try {
+        const status = audioRecorder.getStatus();
+        if (status.isRecording || audioRecorder.isRecording) {
+          return;
+        }
+      } catch {
+        // Continue if getStatus check fails
+      }
+
       if (mounted.current) setError(null);
-      await ensurePermission(expectedGeneration);
 
       try {
+        await ensurePermission(expectedGeneration);
         await setAudioModeAsync({
           allowsRecording: true,
           allowsBackgroundRecording: false,
@@ -236,20 +256,19 @@ export function useAnswerRecorder() {
         applyRecording(null);
         if (previousUri !== nextUri) deleteLocalFile(previousUri);
       } catch (recordingError) {
-        if (mounted.current) {
-          const failedUri = audioRecorder.uri;
-          try {
-            if (audioRecorder.getStatus().canRecord || audioRecorder.isRecording) {
-              await audioRecorder.stop();
-            }
-          } catch {
-            // Native stop still resets Android's prepared MediaRecorder in finally.
+        const failedUri = audioRecorder.uri;
+        try {
+          const status = audioRecorder.getStatus();
+          if (status.canRecord || status.isRecording || audioRecorder.isRecording) {
+            await audioRecorder.stop();
           }
-          if (failedUri !== previousUri) deleteLocalFile(failedUri);
-          activeUri.current = previousUri;
-          if (generation.current === expectedGeneration) {
-            setError(getRecorderErrorMessage(recordingError));
-          }
+        } catch {
+          // Native stop still resets Android's prepared MediaRecorder in finally.
+        }
+        if (failedUri && failedUri !== previousUri) deleteLocalFile(failedUri);
+        activeUri.current = previousUri;
+        if (mounted.current && generation.current === expectedGeneration) {
+          setError(getRecorderErrorMessage(recordingError));
         }
         await setPlaybackAudioMode().catch(() => undefined);
         throw recordingError;
@@ -275,11 +294,18 @@ export function useAnswerRecorder() {
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "background") return;
-      const status = audioRecorder.getStatus();
+      let isRecording = false;
+      try {
+        const status = audioRecorder.getStatus();
+        isRecording = status.isRecording || status.canRecord;
+      } catch {
+        isRecording = false;
+      }
       if (
         observedRecording.current ||
         recordingStartedAt.current !== null ||
-        status.isRecording
+        audioRecorder.isRecording ||
+        isRecording
       ) {
         void finalizeRecording().catch(() => undefined);
       } else {
@@ -294,10 +320,31 @@ export function useAnswerRecorder() {
     return () => {
       mounted.current = false;
       generation.current += 1;
-      deleteLocalFile(recordingRef.current?.uri ?? activeUri.current);
-      void setPlaybackAudioMode().catch(() => undefined);
+      const uriToClean = recordingRef.current?.uri ?? activeUri.current;
+      activeUri.current = null;
+      recordingRef.current = null;
+      observedRecording.current = false;
+      recordingStartedAt.current = null;
+
+      void (async () => {
+        try {
+          const status = audioRecorder.getStatus();
+          if (
+            status.isRecording ||
+            status.canRecord ||
+            audioRecorder.isRecording
+          ) {
+            await audioRecorder.stop();
+          }
+        } catch {
+          // Best effort stop on unmount
+        } finally {
+          deleteLocalFile(uriToClean);
+          await setPlaybackAudioMode().catch(() => undefined);
+        }
+      })();
     };
-  }, []);
+  }, [audioRecorder]);
 
   const durationMillis = recording?.durationMillis ?? recorderState.durationMillis;
 
