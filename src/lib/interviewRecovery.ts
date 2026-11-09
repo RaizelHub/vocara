@@ -113,3 +113,16 @@ export function isInterviewUnrecoverable(data: InterviewRecovery): boolean {
   }
   return false;
 }
+
+export async function clearCompletedInterviewSession(
+  userId: string | null | undefined,
+  deps: {
+    clearRecoveryReference: (ownerId: string) => Promise<void>;
+    resetSession: () => void;
+  },
+): Promise<void> {
+  deps.resetSession();
+  if (userId) {
+    await deps.clearRecoveryReference(userId).catch(() => undefined);
+  }
+}

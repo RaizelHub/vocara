@@ -29,7 +29,13 @@ import { TranscriptPreview } from "@/components/interview/TranscriptPreview";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { ErrorState, LoadingState } from "@/components/ui/DataState";
 import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { isInterviewUnrecoverable, planInterviewRecovery, recoverySession, type InterviewRecovery } from "@/lib/interviewRecovery";
+import {
+  clearCompletedInterviewSession,
+  isInterviewUnrecoverable,
+  planInterviewRecovery,
+  recoverySession,
+  type InterviewRecovery,
+} from "@/lib/interviewRecovery";
 import {
   getRecorderErrorMessage,
   MicrophonePermissionError,
@@ -81,6 +87,11 @@ import {
 } from "@/types/interview";
 
 const SERVICE_CONFIGURATION_ERRORS = new Set(["EVALUATION_NOT_CONFIGURED", "GROQ_MODEL_UNAVAILABLE", "GROQ_BUDGET_LIMIT"]);
+
+const COMPLETED_SESSION_CLEANUP_DEPS = {
+  clearRecoveryReference: (ownerId: string) => recoveryReference.clear(ownerId),
+  resetSession: resetInterviewSession,
+};
 
 type FailureStage =
   | "permission"
@@ -173,6 +184,7 @@ export default function InterviewSessionScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const sessionId = id ?? getInterviewSession()?.id;
   const { user } = useAuth();
+  const userId = user?.id;
   const [data, setData] = useState<InterviewRecovery | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [waiting, setWaiting] = useState<string | null>(null);
@@ -193,6 +205,8 @@ export default function InterviewSessionScreen() {
         if (!saved) throw new Error('No saved interview was found. Return home to start one.');
         const plan = planInterviewRecovery(saved);
         if (plan.kind === 'completed') {
+          await clearCompletedInterviewSession(userId, COMPLETED_SESSION_CLEANUP_DEPS);
+          if (!active) return;
           router.replace({ pathname: '/interview/results', params: { id: saved.session.id } });
           return;
         }
@@ -217,8 +231,8 @@ export default function InterviewSessionScreen() {
           setWaiting(null);
           const msg = e instanceof Error ? e.message : 'Could not restore your interview. Check your connection and retry.';
           setError(msg);
-          if (msg.includes('ended') && user?.id) {
-            void recoveryReference.clear(user.id).catch(() => undefined);
+          if (msg.includes('ended') && userId) {
+            void recoveryReference.clear(userId).catch(() => undefined);
             resetInterviewSession();
           }
         }
@@ -226,7 +240,7 @@ export default function InterviewSessionScreen() {
     };
     void load();
     return () => { active = false; clearTimeout(timer); };
-  }, [sessionId, retry, user?.id]);
+  }, [sessionId, retry, userId]);
 
   const targetSessionId = sessionId || data?.session.id;
 
@@ -235,9 +249,9 @@ export default function InterviewSessionScreen() {
     setAbandoning(true);
     setAbandonError(null);
     try {
-      await interviewSessionService.abandon(targetSessionId, user?.id);
-      if (user?.id) {
-        await recoveryReference.clear(user.id).catch(() => undefined);
+      await interviewSessionService.abandon(targetSessionId, userId);
+      if (userId) {
+        await recoveryReference.clear(userId).catch(() => undefined);
       }
       resetInterviewSession();
       setAbandonVisible(false);
@@ -251,7 +265,7 @@ export default function InterviewSessionScreen() {
     } finally {
       setAbandoning(false);
     }
-  }, [abandoning, targetSessionId, user?.id]);
+  }, [abandoning, targetSessionId, userId]);
 
   const plan = data ? planInterviewRecovery(data) : null;
   if (ready && data && (!sessionId || data.session.id === sessionId) && plan?.kind === 'room') {
@@ -295,6 +309,7 @@ export default function InterviewSessionScreen() {
 function InterviewRoom({ session, initialState }: { session: InterviewSession; initialState: RoomState }) {
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
+  const userId = user?.id;
   const [state, dispatch] = useReducer(roomReducer, initialState);
   const [exitVisible, setExitVisible] = useState(false);
   const [abandonVisible, setAbandonVisible] = useState(false);
@@ -593,7 +608,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
       }
       operationInFlight.current = false;
     }
-  }, [discardRecording, recording, session, state.answer, state.audioPath, state.index, user]);
+  }, [discardRecording, recording, session, state.answer, state.audioPath, state.index, state.transcript, user]);
 
   const retryTranscription = useCallback(async () => {
     if (operationInFlight.current || !state.answer) return;
@@ -696,7 +711,8 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         try {
           const result = await finalizationService.finalizeInterview(session.id);
           if (screenGeneration.current !== expectedScreenGeneration) return;
-          resetInterviewSession();
+          await clearCompletedInterviewSession(userId, COMPLETED_SESSION_CLEANUP_DEPS);
+          if (screenGeneration.current !== expectedScreenGeneration) return;
           router.replace({
             pathname: "/interview/results",
             params: { id: result.sessionId },
@@ -705,7 +721,8 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
         } catch (error) {
           if (screenGeneration.current !== expectedScreenGeneration) return;
           if (error instanceof FinalizationError && error.code === "already_finalized") {
-            resetInterviewSession();
+            await clearCompletedInterviewSession(userId, COMPLETED_SESSION_CLEANUP_DEPS);
+            if (screenGeneration.current !== expectedScreenGeneration) return;
             router.replace({
               pathname: "/interview/results",
               params: { id: session.id },
@@ -741,7 +758,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } finally {
       operationInFlight.current = false;
     }
-  }, [discardRecording, session, state.index]);
+  }, [discardRecording, session, state.index, userId]);
 
   const retryFinalization = useCallback(async () => {
     if (operationInFlight.current || !session) return;
@@ -751,7 +768,8 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     try {
       const result = await finalizationService.finalizeInterview(session.id);
       if (screenGeneration.current !== expectedScreenGeneration) return;
-      resetInterviewSession();
+      await clearCompletedInterviewSession(userId, COMPLETED_SESSION_CLEANUP_DEPS);
+      if (screenGeneration.current !== expectedScreenGeneration) return;
       router.replace({
         pathname: "/interview/results",
         params: { id: result.sessionId },
@@ -759,7 +777,8 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } catch (error) {
       if (screenGeneration.current !== expectedScreenGeneration) return;
       if (error instanceof FinalizationError && error.code === "already_finalized") {
-        resetInterviewSession();
+        await clearCompletedInterviewSession(userId, COMPLETED_SESSION_CLEANUP_DEPS);
+        if (screenGeneration.current !== expectedScreenGeneration) return;
         router.replace({
           pathname: "/interview/results",
           params: { id: session.id },
@@ -774,7 +793,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } finally {
       operationInFlight.current = false;
     }
-  }, [session]);
+  }, [session, userId]);
 
   const handleLeave = useCallback(() => {
     screenGeneration.current += 1;
@@ -784,14 +803,16 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     router.replace("/home");
   }, []);
 
+  const activeSessionId = session?.id;
+
   const handleAbandon = useCallback(async () => {
-    if (!session?.id || abandoning) return;
+    if (!activeSessionId || abandoning) return;
     setAbandoning(true);
     setAbandonError(null);
     try {
-      await interviewSessionService.abandon(session.id, user?.id);
-      if (user?.id) {
-        await recoveryReference.clear(user.id).catch(() => undefined);
+      await interviewSessionService.abandon(activeSessionId, userId);
+      if (userId) {
+        await recoveryReference.clear(userId).catch(() => undefined);
       }
       resetInterviewSession();
       setAbandonVisible(false);
@@ -805,7 +826,7 @@ function InterviewRoom({ session, initialState }: { session: InterviewSession; i
     } finally {
       setAbandoning(false);
     }
-  }, [abandoning, session?.id, user?.id]);
+  }, [abandoning, activeSessionId, userId]);
 
   const handleReauthenticate = useCallback(() => {
     screenGeneration.current += 1;

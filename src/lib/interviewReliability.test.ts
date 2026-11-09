@@ -1,4 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createInterviewStarter, runInterviewInitialization } from './interviewStarter';
+import { interviewStartError } from './interviewErrors';
+import { clearCompletedInterviewSession, isInterviewUnrecoverable, planInterviewRecovery, recoverySession, type InterviewRecovery } from './interviewRecovery';
+import { createRecoveryReference } from './interviewRecoveryReference';
+import { getInterviewSession, resetInterviewSession, startInterviewSession } from '../state/session';
+import { canRetryEvaluation } from '../services/evaluationService';
+import { interviewSessionService } from '../services/interviewSessionService';
 
 vi.mock('expo-crypto', () => ({ randomUUID: () => 'mock-uuid' }));
 
@@ -17,14 +24,6 @@ vi.mock('@/lib/supabase', () => ({
   },
   assertSupabaseConfigured: vi.fn(),
 }));
-
-import { createInterviewStarter, runInterviewInitialization } from './interviewStarter';
-import { interviewStartError } from './interviewErrors';
-import { isInterviewUnrecoverable, planInterviewRecovery, recoverySession, type InterviewRecovery } from './interviewRecovery';
-import { createRecoveryReference } from './interviewRecoveryReference';
-import { getInterviewSession, resetInterviewSession, startInterviewSession } from '../state/session';
-import { canRetryEvaluation } from '../services/evaluationService';
-import { interviewSessionService } from '../services/interviewSessionService';
 
 function saved(): InterviewRecovery {
   return {
@@ -403,5 +402,66 @@ describe('interview recovery and abandonment regression (10 scenarios)', () => {
 
     expect(canRetryEvaluation(new Error('Transient gateway timeout'))).toBe(true);
     expect(isInterviewUnrecoverable(data)).toBe(false);
+  });
+
+  it('11. Completed interviews clear both stale in-memory session state and local recovery references', async () => {
+    const store = new Map<string, string>();
+    const ref = createRecoveryReference({
+      getItem: async k => store.get(k) ?? null,
+      setItem: async (k, v) => { store.set(k, v); },
+      removeItem: async k => { store.delete(k); },
+    });
+    const otherUserId = '33333333-3333-4333-8333-333333333333';
+    const otherSessionId = '44444444-4444-4444-8444-444444444444';
+
+    const activeSession = startInterviewSession({
+      id: sessionId,
+      role: 'Backend Engineer',
+      type: 'standard',
+      difficulty: 'intermediate',
+      interviewerStyle: 'balanced',
+      length: 'quick',
+      totalQuestions: 1,
+      questions: ['Describe an outage you resolved.'],
+      questionIds: ['q-1'],
+    });
+    await ref.save(userId, activeSession.id);
+    await ref.save(otherUserId, otherSessionId);
+    expect(getInterviewSession()?.id).toBe(sessionId);
+    expect(await ref.read(userId)).toBe(sessionId);
+
+    await clearCompletedInterviewSession(userId, {
+      clearRecoveryReference: ownerId => ref.clear(ownerId),
+      resetSession: resetInterviewSession,
+    });
+
+    expect(getInterviewSession()).toBeNull();
+    expect(await ref.read(userId)).toBeNull();
+    expect(await ref.read(otherUserId)).toBe(otherSessionId);
+  });
+
+  it('12. Completed interview cleanup tolerates local storage clear errors while still resetting memory', async () => {
+    startInterviewSession({
+      id: sessionId,
+      role: 'Product Manager',
+      type: 'behavioral',
+      difficulty: 'beginner',
+      interviewerStyle: 'supportive',
+      length: 'quick',
+      totalQuestions: 1,
+      questions: ['Tell me about a product tradeoff.'],
+      questionIds: ['q-2'],
+    });
+
+    await expect(
+      clearCompletedInterviewSession(userId, {
+        clearRecoveryReference: async () => {
+          throw new Error('SecureStore unavailable');
+        },
+        resetSession: resetInterviewSession,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(getInterviewSession()).toBeNull();
   });
 });
